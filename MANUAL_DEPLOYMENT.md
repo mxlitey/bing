@@ -17,6 +17,15 @@
    ```
 
 ## 步骤2: 安装依赖和配置
+
+### 配置Worker入口点
+在项目根目录下的`wrangler.toml`文件中，需要添加`main`字段来指定Worker脚本的入口点。例如：
+
+```toml
+main = "bing.js"
+```
+
+这告诉Wrangler CLI要部署的Worker脚本文件是`bing.js`。确保该文件存在于项目根目录中，并且包含正确的Worker代码。
 1. 安装Wrangler CLI（如果尚未安装）:
    ```bash
    npm install -g wrangler

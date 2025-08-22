@@ -1,4 +1,5 @@
 name = "bing-image-worker"
+main = "bing.js"
 
 compatibility_date = "2025-08-22"
 
