@@ -20,7 +20,7 @@ async function getBingImageData() {
 }
 
 /**
- * 格式化日期：将YYYYMMDD转换为YYYY-MM-DD并加1天
+ * 格式化日期：将YYYYMMDD转换为YYYY-MM-DD
  * @param {string} enddate - 格式为YYYYMMDD的日期字符串
  * @returns {string} 格式为YYYY-MM-DD的日期字符串
  */
@@ -30,9 +30,8 @@ function formatDate(enddate) {
   const month = parseInt(enddate.substring(4, 6)) - 1; // 月份从0开始
   const day = parseInt(enddate.substring(6, 8));
   
-  // 创建日期对象并加1天
+  // 创建日期对象
   const date = new Date(year, month, day);
-  date.setDate(date.getDate() + 1);
   
   // 格式化日期为YYYY-MM-DD
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
