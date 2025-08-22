@@ -1,5 +1,4 @@
 name = "bing-image-worker"
-type = "javascript"
 
 compatibility_date = "2025-08-22"
 
@@ -10,7 +9,7 @@ compatibility_date = "2025-08-22"
 command = ""  # 不需要额外构建命令
 
 # R2 存储桶绑定配置
-[r2_buckets]
+[[r2_buckets]]
 binding = "R2_BUCKET"  # 与代码中使用的变量名对应
 bucket_name = "bing"  # R2 存储桶名称
 
