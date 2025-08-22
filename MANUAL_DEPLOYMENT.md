@@ -31,15 +31,6 @@ main = "bing.js"
    npm install -g wrangler
    ```
 
-2. 确认wrangler.toml配置:
-   - 确保`name`字段设置为你想要的Worker名称
-   - 确保R2存储桶绑定配置正确:
-     ```toml
-     [r2_buckets]
-     binding = "R2_BUCKET"
-     bucket_name = "bing"
-     ```
-
 3. 配置Cloudflare API令牌:
    - 登录Cloudflare控制台
    - 转到[API令牌](https://dash.cloudflare.com/profile/api-tokens)页面
@@ -54,13 +45,7 @@ main = "bing.js"
      - 名称填入`CLOUDFLARE_API_TOKEN`
      - 值填入复制的Cloudflare API令牌
      - 点击`Add secret`
-   - 确保`name`字段设置为你想要的Worker名称
-   - 确保R2存储桶绑定配置正确:
-     ```toml
-     [r2_buckets]
-     binding = "R2_BUCKET"
-     bucket_name = "bing"
-     ```
+
 
 ## 步骤3: 通过GitHub推送触发部署
 1. 在本地进行测试（可选但推荐）:
@@ -103,6 +88,27 @@ main = "bing.js"
    ```
 
 ## 步骤4: 验证部署
+
+## 故障排除
+### 问题：图片保存到R2存储桶中没有.jpg后缀
+**原因**：在代码中生成文件名时没有添加.jpg扩展名。
+
+**解决方案**：
+1. 打开<mcfile name="bing.js" path="c:\Users\czg95\Desktop\bing\bing.js"></mcfile>文件
+2. 找到以下代码行：
+   ```javascript
+   // 格式化日期并生成文件名
+   fileName = formatDate(data.images[0].enddate);
+   ```
+3. 修改为：
+   ```javascript
+   // 格式化日期并生成文件名（添加.jpg后缀）
+   fileName = formatDate(data.images[0].enddate) + '.jpg';
+   ```
+4. 提交并推送更改到GitHub
+
+这个修复确保了保存到R2存储桶的图片文件有正确的.jpg扩展名。
+
 1. 访问部署后的Worker URL
 2. 检查是否返回包含Bing图片信息的JSON响应:
    ```json

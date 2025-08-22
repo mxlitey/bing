@@ -80,8 +80,8 @@ async function handleRequest(request, env) {
       // 使用urlbase拼接UHD格式图片URL
       imageUrl = `https://cn.bing.com${data.images[0].urlbase}_UHD.jpg`;
       
-      // 格式化日期并生成文件名
-      fileName = formatDate(data.images[0].enddate);
+      // 格式化日期并生成文件名（添加.jpg后缀）
+      fileName = formatDate(data.images[0].enddate) + '.jpg';
     }
     
     // 下载并保存图片到R2
