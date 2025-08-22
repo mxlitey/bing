@@ -16,19 +16,35 @@
    cd your-repo-name
    ```
 
-## 步骤2: 安装依赖和配置Wrangler
+## 步骤2: 安装依赖和配置
 1. 安装Wrangler CLI（如果尚未安装）:
    ```bash
    npm install -g wrangler
    ```
 
-2. 登录Cloudflare账号:
-   ```bash
-   wrangler login
-   ```
-   这将打开浏览器，要求你授权Wrangler访问你的Cloudflare账号。
+2. 确认wrangler.toml配置:
+   - 确保`name`字段设置为你想要的Worker名称
+   - 确保R2存储桶绑定配置正确:
+     ```toml
+     [r2_buckets]
+     binding = "R2_BUCKET"
+     bucket_name = "bing"
+     ```
 
-3. 确认wrangler.toml配置:
+3. 配置Cloudflare API令牌:
+   - 登录Cloudflare控制台
+   - 转到[API令牌](https://dash.cloudflare.com/profile/api-tokens)页面
+   - 创建一个具有以下权限的API令牌：
+     - Workers KV Storage: Edit
+     - Workers Scripts: Edit
+     - R2 Admin: Edit
+   - 复制生成的API令牌
+   - 在GitHub仓库中配置 secrets：
+     - 转到仓库的`Settings > Secrets and variables > Actions`
+     - 点击`New repository secret`
+     - 名称填入`CLOUDFLARE_API_TOKEN`
+     - 值填入复制的Cloudflare API令牌
+     - 点击`Add secret`
    - 确保`name`字段设置为你想要的Worker名称
    - 确保R2存储桶绑定配置正确:
      ```toml
@@ -40,6 +56,10 @@
 ## 步骤3: 通过GitHub推送触发部署
 1. 在本地进行测试（可选但推荐）:
    ```bash
+   # 登录Cloudflare（仅本地测试需要）
+   wrangler login
+   
+   # 启动本地开发服务器
    wrangler dev
    ```
    这将启动本地开发服务器，你可以测试Worker功能是否正常。
