@@ -1,20 +1,17 @@
 name = "bing-image-worker"
-main = "bing.js"
+main = "src/index.js"
 
 compatibility_date = "2025-08-22"
 
 [vars]
-# 可以在这里添加环境变量
 
-[build]
-command = ""  # 不需要额外构建命令
+[[kv_namespaces]]
+binding = "BING_KV"
+id = "your-kv-namespace-id"
 
-# R2 存储桶绑定配置
-[[r2_buckets]]
-binding = "R2_BUCKET"  # 与代码中使用的变量名对应
-bucket_name = "bing"  # R2 存储桶名称
+[assets]
+directory = "public"
+binding = "ASSETS"
 
-# 可选：指定 workers_dev 或自定义域
-# workers_dev = true
-# route = "example.com/*"
-# zone_id = "<ZONE_ID>"
+[triggers]
+crons = ["0 0 * * *"]

@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bing Wallpaper 管理面板</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="header">
+    <h1>🖼️ Bing Wallpaper 管理面板</h1>
+    <p>每日自动更新 · 数据按月存储 · zh-CN</p>
+  </div>
+  
+  <div class="container">
+    <div class="stats" id="stats"></div>
+
+    <div class="card">
+      <h2>📥 导入数据</h2>
+      <div id="dropZone">
+        <p>📂 拖拽 JSON 文件到此处，或点击选择文件</p>
+        <p>支持格式: [{"date":"20260501","copyright":"...","url":"..."}]</p>
+        <input type="file" id="fileInput" accept=".json" style="display:none">
+      </div>
+      <div class="progress-bar" id="importProgress"><div class="fill"></div></div>
+      <div class="mt8" id="importResult"></div>
+    </div>
+
+    <div class="card">
+      <h2>📤 导出数据</h2>
+      <div class="flex">
+        <input type="text" id="exportStart" placeholder="起始月份 202102">
+        <span>~</span>
+        <input type="text" id="exportEnd" placeholder="结束月份 202605">
+        <button class="btn btn-primary" onclick="exportData()">导出预览</button>
+        <button class="btn btn-success" onclick="exportData(true)">下载文件</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>⚡ 快捷操作</h2>
+      <div class="flex">
+        <button class="btn btn-primary" onclick="triggerUpdate()">🔄 手动更新今天</button>
+        <button class="btn btn-warn" onclick="refreshStats()">📊 刷新统计</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>📅 月份数据</h2>
+      <table>
+        <thead><tr><th>月份</th><th>记录数</th><th>操作</th></tr></thead>
+        <tbody id="monthTable"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  
+  <script src="/app.js"></script>
+</body>
+</html>
