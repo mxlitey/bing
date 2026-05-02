@@ -37,7 +37,8 @@ jobs:
         working-directory: backend
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
-          sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
+          sed -i '/^AUTH_TOKEN/d' wrangler.toml
+          echo "AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"" >> wrangler.toml
           wrangler deploy
 
       - name: Inject API_BASE and Deploy Frontend
@@ -55,9 +56,6 @@ jobs:
           
           echo "Verifying injection:"
           grep "API_BASE" static/gallery.js || echo "Not found in gallery.js"
-          
-          sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
-          sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
           
           wrangler pages project create bing --production-branch=main 2>/dev/null || true
           wrangler pages deploy . --project-name=bing --commit-dirty=true

@@ -2,8 +2,9 @@ const $ = (id) => document.getElementById(id);
 const API_BASE = '__API_BASE__';
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('token');
+  opts.headers = opts.headers || {};
   if (token && !opts.skipAuth) {
-    opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
+    opts.headers['Authorization'] = `Bearer ${token}`;
   }
   return (await fetch(API_BASE + path, opts)).json();
 };
