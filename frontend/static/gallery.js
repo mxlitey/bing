@@ -26,8 +26,11 @@ async function loadData() {
 function groupData() {
   groupedData = {};
   allData.forEach(item => {
-    const y = item.date.slice(0, 4), m = item.date.slice(0, 6);
-    (groupedData[y] ??= {})[m] ??= []).push(item);
+    const y = item.date.slice(0, 4);
+    const m = item.date.slice(0, 6);
+    if (!groupedData[y]) groupedData[y] = {};
+    if (!groupedData[y][m]) groupedData[y][m] = [];
+    groupedData[y][m].push(item);
   });
 }
 
