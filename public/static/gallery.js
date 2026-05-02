@@ -145,20 +145,32 @@ function updateUI(year, month) {
 }
 
 function initObservers() {
-  const imgOpts = { rootMargin: '100px 0px', threshold: 0.01 };
   const headerOffset = 80;
   const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
   
-  const imgObserver = new IntersectionObserver(entries => {
+  const viewportObserver = new IntersectionObserver(entries => {
+    entries.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
     entries.forEach(e => {
       if (e.isIntersecting) {
         loadImage(e.target);
-        imgObserver.unobserve(e.target);
+        viewportObserver.unobserve(e.target);
       }
     });
-  }, imgOpts);
+  }, { rootMargin: '0px', threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
   
-  document.querySelectorAll('.lazy-img').forEach(img => imgObserver.observe(img));
+  const preloadObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && !e.target.src) {
+        loadImage(e.target);
+        preloadObserver.unobserve(e.target);
+      }
+    });
+  }, { rootMargin: '200px 0px', threshold: 0.01 });
+  
+  document.querySelectorAll('.lazy-img').forEach(img => {
+    viewportObserver.observe(img);
+    preloadObserver.observe(img);
+  });
   
   const heroHeight = $('hero')?.offsetHeight || 0;
   let lastScrollY = 0;
