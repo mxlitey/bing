@@ -74,7 +74,9 @@ function renderChronicle() {
     
     html += `<section class="year-section" id="y${year}">
       <div class="year-header">
-        <h2 class="year-title">${year}</h2>
+        <a href="/${year}" class="year-title-link">
+          <h2 class="year-title">${year}</h2>
+        </a>
         <span class="year-count">${totalCount} 张</span>
       </div>`;
     
@@ -83,15 +85,16 @@ function renderChronicle() {
       const items = yearData[monthKey];
       
       html += `<section class="month-section" id="m${monthKey}">
-        <h3 class="month-title">${monthNames[monthNum - 1]}</h3>
+        <a href="/${monthKey}" class="month-title-link">
+          <h3 class="month-title">${monthNames[monthNum - 1]}</h3>
+        </a>
         <div class="thumb-grid">`;
       
       items.forEach(item => {
-        const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
-        html += `<a href="/${item.date}" class="thumb-item" data-date="${item.date}" data-month="${monthKey}">
-          <img data-src="${thumbUrl}" alt="${item.copyright}" class="lazy-img">
+        html += `<div class="thumb-item" data-url="${item.url}" data-date="${item.date}" onclick="openImage('${item.url}')">
+          <img data-src="${item.thumbUrl || item.url.replace('_UHD.jpg', '_800x480.jpg')}" data-fallback="${item.url}" alt="${item.copyright}" class="lazy-img">
           <div class="thumb-date">${item.date.substring(6, 8)}</div>
-        </a>`;
+        </div>`;
       });
       
       html += `</div></section>`;
@@ -106,7 +109,7 @@ function renderChronicle() {
 function initImageObserver() {
   const options = {
     root: null,
-    rootMargin: '100px 0px',
+    rootMargin: '200px 0px',
     threshold: 0.01
   };
   
@@ -115,8 +118,23 @@ function initImageObserver() {
       if (entry.isIntersecting) {
         const img = entry.target;
         if (img.dataset.src && !img.src) {
-          img.src = img.dataset.src;
-          img.removeAttribute('data-src');
+          const thumbUrl = img.dataset.src;
+          const fallbackUrl = img.dataset.fallback;
+          
+          img.onload = () => {
+            img.removeAttribute('data-src');
+            img.removeAttribute('data-fallback');
+          };
+          
+          img.onerror = () => {
+            if (img.src === thumbUrl && fallbackUrl) {
+              img.src = fallbackUrl;
+            } else {
+              img.style.display = 'none';
+            }
+          };
+          
+          img.src = thumbUrl;
           imageObserver.unobserve(img);
         }
       }
@@ -172,34 +190,90 @@ function toggleTimelineGroup(year) {
 }
 
 function initScrollObserver() {
-  const sections = document.querySelectorAll('.year-section');
+  const yearSections = document.querySelectorAll('.year-section');
+  const monthSections = document.querySelectorAll('.month-section');
   const sidebar = $('timelineSidebar');
+  const floatingInfo = $('floatingInfo');
   
   if (!sidebar) return;
   
-  const observer = new IntersectionObserver((entries) => {
+  let currentYear = '';
+  let currentMonth = '';
+  let heroHeight = $('hero')?.offsetHeight || 0;
+  
+  const yearObserver = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const year = entry.target.id.replace('y', '');
-        document.querySelectorAll('.timeline-group').forEach(group => {
-          group.classList.toggle('active', group.dataset.year === year);
-        });
+        currentYear = year;
+        updateFloatingInfo(currentYear, currentMonth);
+        updateTimeline(year);
       }
     });
-  }, { threshold: 0.3, rootMargin: '-20% 0px -60% 0px' });
+  }, { threshold: 0, rootMargin: '-50% 0px -50% 0px' });
   
-  sections.forEach(section => observer.observe(section));
+  const monthObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const monthKey = entry.target.id.replace('m', '');
+        currentMonth = monthKey;
+        const year = monthKey.substring(0, 4);
+        currentYear = year;
+        updateFloatingInfo(currentYear, currentMonth);
+        updateTimeline(year, monthKey);
+      }
+    });
+  }, { threshold: 0, rootMargin: '-50% 0px -50% 0px' });
   
-  window.addEventListener('scroll', () => {
+  yearSections.forEach(section => yearObserver.observe(section));
+  monthSections.forEach(section => monthObserver.observe(section));
+  
+  function handleScroll() {
     const scrollTop = window.scrollY;
-    const heroHeight = $('hero')?.offsetHeight || 0;
     
     if (scrollTop > heroHeight * 0.5) {
       sidebar.classList.add('visible');
+      if (floatingInfo) floatingInfo.classList.add('visible');
     } else {
       sidebar.classList.remove('visible');
+      if (floatingInfo) floatingInfo.classList.remove('visible');
     }
-  }, { passive: true });
+  }
+  
+  window.addEventListener('scroll', handleScroll, { passive: true });
+  handleScroll();
+}
+
+function updateTimeline(year, month) {
+  document.querySelectorAll('.timeline-group').forEach(group => {
+    const isActive = group.dataset.year === year;
+    group.classList.toggle('active', isActive);
+    
+    if (isActive && month) {
+      group.classList.add('expanded');
+      group.querySelectorAll('.timeline-sub-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.month === month);
+      });
+    }
+  });
+}
+
+function updateFloatingInfo(year, month) {
+  const floatingInfo = $('floatingInfo');
+  if (!floatingInfo) return;
+  
+  const yearEl = floatingInfo.querySelector('.floating-year');
+  const monthEl = floatingInfo.querySelector('.floating-month');
+  
+  if (yearEl) yearEl.textContent = year + ' 年';
+  if (monthEl && month) {
+    const monthNum = parseInt(month.substring(4, 6));
+    monthEl.textContent = monthNames[monthNum - 1];
+  }
+}
+
+function openImage(url) {
+  window.open(url, '_blank');
 }
 
 document.addEventListener('DOMContentLoaded', loadData);

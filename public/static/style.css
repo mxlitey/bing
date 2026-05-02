@@ -19,6 +19,46 @@ html { scroll-behavior: smooth; }
 html::-webkit-scrollbar { display: none; }
 html { -ms-overflow-style: none; scrollbar-width: none; }
 
+.floating-info {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 24px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 30px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.floating-info.visible {
+  opacity: 1;
+}
+
+.floating-year {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.floating-divider {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 20px;
+}
+
+.floating-month {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.9);
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
   background: var(--bg-primary);
@@ -203,10 +243,19 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+.year-title-link {
+  text-decoration: none;
+}
+
 .year-title {
   font-size: 32px;
   font-weight: 700;
   color: #ffffff;
+  transition: color 0.2s ease;
+}
+
+.year-title-link:hover .year-title {
+  color: var(--accent);
 }
 
 .year-count {
@@ -222,12 +271,21 @@ body {
   margin-bottom: 40px;
 }
 
+.month-title-link {
+  text-decoration: none;
+}
+
 .month-title {
   font-size: 18px;
   font-weight: 600;
   color: var(--text-secondary);
   margin-bottom: 16px;
   padding-left: 4px;
+  transition: color 0.2s ease;
+}
+
+.month-title-link:hover .month-title {
+  color: var(--accent);
 }
 
 .thumb-grid {
@@ -244,6 +302,7 @@ body {
   display: block;
   background: var(--bg-secondary);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  cursor: pointer;
 }
 
 .thumb-item:hover {
