@@ -2,7 +2,6 @@ const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 let allData = [], years = [], groupedData = {};
-let scrollTimeout = null;
 let isScrollingToTarget = false;
 let currentYear = '', currentMonth = '';
 
@@ -108,23 +107,44 @@ function scrollToMonth(month, year) {
   }
 }
 
+function loadImage(img) {
+  if (!img.dataset.src || img.src) return;
+  img.onload = () => {
+    img.removeAttribute('data-src');
+    img.classList.add('loaded');
+  };
+  img.onerror = () => {
+    img.src = img.dataset.fallback;
+    img.classList.add('loaded');
+  };
+  img.src = img.dataset.src;
+}
+
+function updateUI(year, month) {
+  if (year === currentYear && month === currentMonth) return;
+  currentYear = year;
+  currentMonth = month;
+  
+  const groups = document.querySelectorAll('.timeline-group');
+  for (let i = 0; i < groups.length; i++) {
+    const g = groups[i];
+    const active = g.dataset.year === year;
+    if (active) {
+      g.classList.add('active', 'expanded');
+      const items = g.querySelectorAll('.timeline-sub-item');
+      for (let j = 0; j < items.length; j++) {
+        items[j].classList.toggle('active', items[j].dataset.month === month);
+      }
+    } else {
+      g.classList.remove('active', 'expanded');
+    }
+  }
+}
+
 function initObservers() {
   const imgOpts = { rootMargin: '100px 0px', threshold: 0.01 };
   const headerOffset = 80;
   const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
-  
-  function loadImage(img) {
-    if (!img.dataset.src || img.src) return;
-    img.onload = () => {
-      img.removeAttribute('data-src');
-      img.classList.add('loaded');
-    };
-    img.onerror = () => {
-      img.src = img.dataset.fallback;
-      img.classList.add('loaded');
-    };
-    img.src = img.dataset.src;
-  }
   
   const imgObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
@@ -138,56 +158,44 @@ function initObservers() {
   document.querySelectorAll('.lazy-img').forEach(img => imgObserver.observe(img));
   
   const heroHeight = $('hero')?.offsetHeight || 0;
+  let lastScrollY = 0;
+  let sidebarVisible = false;
   
   const yearObserver = new IntersectionObserver(entries => {
     if (isScrollingToTarget) return;
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        currentYear = e.target.id.slice(1);
-        updateUI(currentYear, currentMonth);
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].isIntersecting) {
+        updateUI(entries[i].target.id.slice(1), currentMonth);
+        break;
       }
-    });
+    }
   }, scrollOpts);
   
   const monthObserver = new IntersectionObserver(entries => {
     if (isScrollingToTarget) return;
-    entries.forEach(e => {
-      if (e.isIntersecting) {
-        currentMonth = e.target.id.slice(1);
-        currentYear = currentMonth.slice(0, 4);
-        updateUI(currentYear, currentMonth);
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].isIntersecting) {
+        const m = entries[i].target.id.slice(1);
+        updateUI(m.slice(0, 4), m);
+        break;
       }
-    });
+    }
   }, scrollOpts);
   
   document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
   document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
   
   window.addEventListener('scroll', () => {
-    clearTimeout(scrollTimeout);
-    scrollTimeout = setTimeout(() => {
-      document.querySelectorAll('.lazy-img[data-src]').forEach(img => {
-        const rect = img.getBoundingClientRect();
-        if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
-          loadImage(img);
-        }
-      });
-    }, 200);
+    const scrollY = window.scrollY;
+    if (Math.abs(scrollY - lastScrollY) < 50) return;
+    lastScrollY = scrollY;
     
-    const show = currentYear && window.scrollY > heroHeight * 0.5;
-    $('timelineSidebar').classList.toggle('visible', show);
+    const show = currentYear && scrollY > heroHeight * 0.5;
+    if (show !== sidebarVisible) {
+      sidebarVisible = show;
+      $('timelineSidebar').classList.toggle('visible', show);
+    }
   }, { passive: true });
-}
-
-function updateUI(year, month) {
-  document.querySelectorAll('.timeline-group').forEach(g => {
-    const active = g.dataset.year === year;
-    g.classList.toggle('active', active);
-    g.classList.toggle('expanded', active);
-    g.querySelectorAll('.timeline-sub-item').forEach(item => {
-      item.classList.toggle('active', item.dataset.month === month);
-    });
-  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
