@@ -22,17 +22,7 @@ jobs:
           KV_LIST=$(wrangler kv:namespace list 2>&1)
           echo "KV List: $KV_LIST"
           
-          KV_ID=$(echo "$KV_LIST" | python3 -c "
-import sys, json
-try:
-    data = json.load(sys.stdin)
-    for item in data:
-        if 'BING_KV' in item.get('title', ''):
-            print(item['id'])
-            break
-except:
-    pass
-" 2>/dev/null || echo "")
+          KV_ID=$(echo "$KV_LIST" | python3 -c "import sys,json; data=json.load(sys.stdin); print(next((i['id'] for i in data if 'BING_KV' in i.get('title','')), ''))" 2>/dev/null || echo "")
           
           if [ -z "$KV_ID" ]; then
             echo "Creating new KV namespace..."
