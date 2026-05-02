@@ -103,7 +103,10 @@ function scrollToMonth(month, year) {
     }
     isScrollingToTarget = true;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => { isScrollingToTarget = false; }, 800);
+    setTimeout(() => { 
+      isScrollingToTarget = false;
+      updateUI(year, month);
+    }, 800);
   }
 }
 
