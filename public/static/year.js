@@ -52,14 +52,16 @@ function renderYear(data) {
     section.className = 'month-section';
     section.id = `m${monthKey}`;
     section.innerHTML = `
-      <h2 class="month-title">${monthNames[monthNum - 1]}</h2>
+      <a href="/${monthKey}" class="month-title-link">
+        <h2 class="month-title">${monthNames[monthNum - 1]}</h2>
+      </a>
       <div class="thumb-grid">
         ${items.map(item => {
           const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
-          return `<a href="/${item.date}" class="thumb-item" data-date="${item.date}">
-            <img data-src="${thumbUrl}" alt="${item.copyright}" class="lazy-img">
+          return `<div class="thumb-item" onclick="openImage('${item.url}')">
+            <img data-src="${thumbUrl}" data-fallback="${item.url}" alt="${item.copyright}" class="lazy-img">
             <div class="thumb-date">${item.date.substring(6, 8)}</div>
-          </a>`;
+          </div>`;
         }).join('')}
       </div>
     `;
@@ -79,8 +81,21 @@ function initImageObserver() {
       if (entry.isIntersecting) {
         const img = entry.target;
         if (img.dataset.src && !img.src) {
-          img.src = img.dataset.src;
-          img.removeAttribute('data-src');
+          const thumbUrl = img.dataset.src;
+          const fallbackUrl = img.dataset.fallback;
+          
+          img.onload = () => {
+            img.removeAttribute('data-src');
+            img.removeAttribute('data-fallback');
+          };
+          
+          img.onerror = () => {
+            if (img.src === thumbUrl && fallbackUrl) {
+              img.src = fallbackUrl;
+            }
+          };
+          
+          img.src = thumbUrl;
           imageObserver.unobserve(img);
         }
       }
@@ -123,6 +138,10 @@ function initScrollObserver() {
   }, { threshold: 0.3, rootMargin: '-20% 0px -60% 0px' });
   
   sections.forEach(section => observer.observe(section));
+}
+
+function openImage(url) {
+  window.open(url, '_blank');
 }
 
 document.addEventListener('DOMContentLoaded', loadYear);
