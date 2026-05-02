@@ -1,4 +1,4 @@
-name = "bing-image-worker"
+name = "bing"
 main = "src/index.js"
 
 compatibility_date = "2025-08-22"
