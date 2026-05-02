@@ -633,8 +633,12 @@ tr:hover td { background: var(--table-row-hover); }
 
 @media (max-width: 640px) {
   .header { padding: 24px 16px 20px; }
-  .header-top { flex-direction: column; gap: 16px; }
-  .header-actions { width: 100%; justify-content: space-between; }
+  .header-top { flex-direction: column; gap: 16px; align-items: stretch; }
+  .logo { justify-content: center; }
+  .header-actions { width: 100%; justify-content: center; gap: 12px; }
+  .theme-switcher { padding: 4px 6px; gap: 4px; }
+  .theme-btn { width: 24px; height: 24px; }
+  .theme-dot { width: 14px; height: 14px; }
   .container { padding: 0 16px 60px; }
   .card-header { padding: 16px 16px 0; }
   .card-body { padding: 16px; }
