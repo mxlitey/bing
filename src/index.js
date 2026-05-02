@@ -179,6 +179,8 @@ export default {
       return item ? json(filterFields(item, fields)) : json({ error: '不存在' }, 404);
     }
 
+    if (!checkAuth(request, env)) return needAuth();
+
     if (path === '/api/export') {
       const data = await handleExport(url.searchParams, env);
       const result = filterFields(data, fields);
@@ -189,8 +191,6 @@ export default {
       }
       return json(result);
     }
-
-    if (!checkAuth(request, env)) return needAuth();
 
     if (path === '/update') return json(await updateBing(env));
 
