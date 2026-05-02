@@ -49,4 +49,4 @@ jobs:
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
           sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
           
-          wrangler pages deploy . --project-name=bing
+          wrangler pages deploy . --project-name=bing --commit-dirty=true
