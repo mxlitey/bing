@@ -3,6 +3,8 @@ const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','
 
 let allData = [], years = [], groupedData = {};
 let scrollTimeout = null;
+let isScrollingToTarget = false;
+let currentYear = '', currentMonth = '';
 
 async function loadData() {
   try {
@@ -100,7 +102,9 @@ function scrollToMonth(month, year) {
       document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
       group.classList.add('expanded');
     }
+    isScrollingToTarget = true;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => { isScrollingToTarget = false; }, 800);
   }
 }
 
@@ -133,10 +137,10 @@ function initObservers() {
   
   document.querySelectorAll('.lazy-img').forEach(img => imgObserver.observe(img));
   
-  let currentYear = '', currentMonth = '';
   const heroHeight = $('hero')?.offsetHeight || 0;
   
   const yearObserver = new IntersectionObserver(entries => {
+    if (isScrollingToTarget) return;
     entries.forEach(e => {
       if (e.isIntersecting) {
         currentYear = e.target.id.slice(1);
@@ -146,6 +150,7 @@ function initObservers() {
   }, scrollOpts);
   
   const monthObserver = new IntersectionObserver(entries => {
+    if (isScrollingToTarget) return;
     entries.forEach(e => {
       if (e.isIntersecting) {
         currentMonth = e.target.id.slice(1);
@@ -158,6 +163,12 @@ function initObservers() {
   document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
   document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
   
+  function updateVisibility() {
+    const show = currentYear && window.scrollY > heroHeight * 0.5;
+    $('timelineSidebar').classList.toggle('visible', show);
+    $('floatingInfo')?.classList.toggle('visible', show);
+  }
+  
   window.addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
@@ -169,14 +180,10 @@ function initObservers() {
       });
     }, 200);
     
-    const show = window.scrollY > heroHeight * 0.5;
-    $('timelineSidebar').classList.toggle('visible', show);
-    $('floatingInfo')?.classList.toggle('visible', show);
+    updateVisibility();
   }, { passive: true });
   
-  const show = window.scrollY > heroHeight * 0.5;
-  $('timelineSidebar').classList.toggle('visible', show);
-  $('floatingInfo')?.classList.toggle('visible', show);
+  updateVisibility();
 }
 
 function updateUI(year, month) {
