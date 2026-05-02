@@ -4,6 +4,7 @@ const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
 let allData = [];
 let years = [];
 let groupedData = {};
+let imageObserver = null;
 
 async function loadData() {
   try {
@@ -21,6 +22,7 @@ async function loadData() {
     groupData();
     renderChronicle();
     renderTimeline();
+    initImageObserver();
     initScrollObserver();
   } catch (err) {
     $('loading').textContent = '加载失败: ' + err.message;
@@ -85,9 +87,9 @@ function renderChronicle() {
         <div class="thumb-grid">`;
       
       items.forEach(item => {
-        const thumbUrl = item.url.replace('_UHD.jpg', '_480x300.jpg');
+        const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
         html += `<a href="/${item.date}" class="thumb-item" data-date="${item.date}" data-month="${monthKey}">
-          <img src="${thumbUrl}" alt="${item.copyright}" loading="lazy">
+          <img data-src="${thumbUrl}" alt="${item.copyright}" class="lazy-img">
           <div class="thumb-date">${item.date.substring(6, 8)}</div>
         </a>`;
       });
@@ -99,6 +101,31 @@ function renderChronicle() {
   });
   
   container.innerHTML = html;
+}
+
+function initImageObserver() {
+  const options = {
+    root: null,
+    rootMargin: '100px 0px',
+    threshold: 0.01
+  };
+  
+  imageObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        if (img.dataset.src && !img.src) {
+          img.src = img.dataset.src;
+          img.removeAttribute('data-src');
+          imageObserver.unobserve(img);
+        }
+      }
+    });
+  }, options);
+  
+  document.querySelectorAll('.lazy-img').forEach(img => {
+    imageObserver.observe(img);
+  });
 }
 
 function renderTimeline() {
