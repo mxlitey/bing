@@ -7,10 +7,11 @@
 - 每天 UTC 0点自动获取 Bing 壁纸信息（zh-CN）
 - 数据按月存储到 Cloudflare KV
 - Web 管理面板：导入、导出、删除数据
+- Token 认证保护管理操作
 
 ## 部署
 
-### 方式一：GitHub Actions 自动部署（推荐）
+### GitHub Actions 自动部署（推荐）
 
 **1. Fork 本仓库**
 
@@ -26,30 +27,19 @@
 |------|-------|
 | `CLOUDFLARE_API_TOKEN` | 上一步创建的 API Token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID（在 Workers 页面右侧可找到） |
+| `AUTH_TOKEN` | 管理面板认证密码（自定义，用于登录管理面板） |
 
-**4. 创建 KV 命名空间**
+**4. 启用 GitHub Actions**
 
-在 Cloudflare Dashboard 进入 `Workers & Pages > KV`，点击 `Create a namespace`，名称填写 `BING_KV`。
+进入仓库的 `Actions` 页面，启用 Workflow。
 
-**5. 获取 KV 命名空间 ID**
+**5. 触发部署**
 
-创建完成后，点击进入命名空间，复制 ID。
-
-**6. 更新 wrangler.toml**
-
-修改 `wrangler.toml` 中的 `id`：
-
-```toml
-[[kv_namespaces]]
-binding = "BING_KV"
-id = "你的KV命名空间ID"
-```
-
-提交更改后，GitHub Actions 会自动部署。
+推送到 `main` 分支即可自动部署。GitHub Actions 会自动创建 KV 命名空间并配置认证 Token。
 
 ---
 
-### 方式二：命令行部署
+### 命令行部署
 
 **1. 安装 Wrangler**
 
@@ -74,14 +64,15 @@ wrangler kv:namespace create BING_KV
 { binding = "BING_KV", id = "xxxx..." }
 ```
 
-**4. 更新 wrangler.toml**
-
-将输出的 `id` 填入 `wrangler.toml`：
+**4. 配置 wrangler.toml**
 
 ```toml
+[vars]
+AUTH_TOKEN = "你的私密密码"
+
 [[kv_namespaces]]
 binding = "BING_KV"
-id = "xxxx..."
+id = "你的KV命名空间ID"
 ```
 
 **5. 部署**
@@ -96,19 +87,27 @@ wrangler deploy
 
 部署成功后，访问 `https://your-worker.your-subdomain.workers.dev` 打开管理面板。
 
+### 认证说明
+
+- 访问管理面板需要输入 `AUTH_TOKEN` 进行认证
+- Token 存储在浏览器 localStorage 中，关闭浏览器后仍有效
+- 点击「退出」按钮可清除登录状态
+
 ### API 端点
 
-| 端点 | 方法 | 说明 |
-|------|------|------|
-| `/` | GET | 管理面板 |
-| `/json` | GET | 获取所有数据 |
-| `/YYYYMM` | GET | 获取指定月份（如 `/202605`） |
-| `/api/import` | POST | 导入 JSON 数据 |
-| `/api/export?start=&end=&download=1` | GET | 导出数据 |
-| `/api/update` | GET | 手动更新 |
-| `/api/stats` | GET | 统计信息 |
-| `/api/months` | GET | 月份列表 |
-| `/api/delete-month` | POST | 删除月份 |
+| 端点 | 方法 | 认证 | 说明 |
+|------|------|------|------|
+| `/` | GET | ❌ | 管理面板页面 |
+| `/json` | GET | ❌ | 获取所有数据 |
+| `/YYYYMM` | GET | ❌ | 获取指定月份（如 `/202605`） |
+| `/YYYYMMDD` | GET | ❌ | 获取指定日期（如 `/20260501`） |
+| `/api/stats` | GET | ❌ | 统计信息 |
+| `/api/months` | GET | ❌ | 月份列表 |
+| `/api/export` | GET | ❌ | 导出数据 |
+| `/api/login` | POST | ❌ | 登录认证 |
+| `/api/update` | GET | ✅ | 手动更新 |
+| `/api/import` | POST | ✅ | 导入数据 |
+| `/api/delete-month` | POST | ✅ | 删除月份 |
 
 ### 数据格式
 
@@ -118,6 +117,35 @@ wrangler deploy
   "copyright": "葡萄风信子和郁金香，库肯霍夫公园，荷兰利瑟 (© Achim Thomae/Getty Images)",
   "url": "https://cn.bing.com/th?id=OHR.TulipsKeukenhof_ZH-CN7554485395_UHD.jpg"
 }
+```
+
+### 字段过滤
+
+所有数据端点支持 `fields` 参数，只返回指定字段：
+
+```bash
+# 只返回 url 字段
+/json?fields=url
+
+# 只返回 date 和 url 字段
+/202605?fields=date,url
+
+# 只返回 copyright 字段
+/20260501?fields=copyright
+```
+
+**响应示例：**
+```json
+// /20260501?fields=url
+{
+  "url": "https://cn.bing.com/th?id=OHR.TulipsKeukenhof_ZH-CN7554485395_UHD.jpg"
+}
+
+// /json?fields=date,url
+[
+  { "date": "20260501", "url": "https://..." },
+  { "date": "20260430", "url": "https://..." }
+]
 ```
 
 ### KV 存储结构

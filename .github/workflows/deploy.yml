@@ -3,7 +3,7 @@ name: Deploy to Cloudflare Workers
 on:
   push:
     branches:
-      - main  # 当代码推送到main分支时触发部署
+      - main
 
 jobs:
   deploy:
@@ -15,15 +15,35 @@ jobs:
       - name: Install Wrangler CLI
         run: npm install -g wrangler
 
+      - name: Create KV namespace if not exists
+        run: |
+          KV_ID=$(wrangler kv:namespace list 2>/dev/null | grep -o '"id": "[^"]*"' | head -1 | cut -d'"' -f4 || true)
+          if [ -z "$KV_ID" ]; then
+            echo "Creating KV namespace..."
+            CREATE_OUTPUT=$(wrangler kv:namespace create BING_KV 2>&1)
+            KV_ID=$(echo "$CREATE_OUTPUT" | grep -oP 'id = "\K[^"]+' || echo "$CREATE_OUTPUT" | grep -o '"id": "[^"]*"' | cut -d'"' -f4)
+          fi
+          echo "KV_NAMESPACE_ID=$KV_ID" >> $GITHUB_ENV
+          echo "KV ID: $KV_ID"
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+      - name: Update wrangler.toml with KV ID and Auth Token
+        run: |
+          if [ -n "$KV_NAMESPACE_ID" ]; then
+            sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_NAMESPACE_ID\"/" wrangler.toml
+            sed -i "s/id = \".*\" # KV_NAMESPACE_ID/id = \"$KV_NAMESPACE_ID\"/" wrangler.toml
+          fi
+          if [ -n "$AUTH_TOKEN" ]; then
+            sed -i "s/AUTH_TOKEN = \"your-secret-token-here\"/AUTH_TOKEN = \"$AUTH_TOKEN\"/" wrangler.toml
+            sed -i "s/AUTH_TOKEN = \"\"/AUTH_TOKEN = \"$AUTH_TOKEN\"/" wrangler.toml
+          fi
+          cat wrangler.toml
+        env:
+          AUTH_TOKEN: ${{ secrets.AUTH_TOKEN }}
+
       - name: Deploy to Workers
         run: wrangler deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-
-      - name: Deploy success notification
-        if: success()
-        run: echo "Successfully deployed to Cloudflare Workers!"
-
-      - name: Deploy failure notification
-        if: failure()
-        run: echo "Deployment to Cloudflare Workers failed!"
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

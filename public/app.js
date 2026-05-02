@@ -1,11 +1,47 @@
 const $ = (id) => document.getElementById(id);
-const api = async (path, opts) => (await fetch(path, opts)).json();
+const api = async (path, opts = {}) => {
+  const token = localStorage.getItem('token');
+  if (token && !opts.skipAuth) {
+    opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
+  }
+  return (await fetch(path, opts)).json();
+};
 
 function toast(msg, type = 'info') {
   const t = $('toast');
   t.textContent = msg;
   t.className = `toast ${type} show`;
   setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function login() {
+  const token = $('tokenInput').value.trim();
+  if (!token) return toast('请输入 Token', 'error');
+  const r = await api('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }), skipAuth: true });
+  if (r.success) {
+    localStorage.setItem('token', token);
+    $('loginBox').style.display = 'none';
+    $('mainBox').style.display = 'block';
+    refreshStats();
+    toast('登录成功', 'success');
+  } else {
+    toast('Token 错误', 'error');
+  }
+}
+
+function logout() {
+  localStorage.removeItem('token');
+  $('loginBox').style.display = 'block';
+  $('mainBox').style.display = 'none';
+}
+
+function checkLogin() {
+  const token = localStorage.getItem('token');
+  if (token) {
+    $('loginBox').style.display = 'none';
+    $('mainBox').style.display = 'block';
+    refreshStats();
+  }
 }
 
 async function refreshStats() {
@@ -40,6 +76,8 @@ async function importData(data) {
     $('importResult').innerHTML = `<span style="color:#10b981">✅ 新增 ${r.imported} 条, 跳过 ${r.skipped} 条</span>`;
     toast('导入成功', 'success');
     refreshStats();
+  } else if (r.error === '需要认证') {
+    logout();
   } else {
     $('importResult').innerHTML = `<span style="color:#ef4444">❌ ${r.error}</span>`;
   }
@@ -60,6 +98,7 @@ async function deleteMonth(m) {
   if (!confirm(`确定删除 ${m}？`)) return;
   const r = await api('/api/delete-month', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ month: m }) });
   if (r.success) { toast(`已删除 ${m}`, 'success'); refreshStats(); }
+  else if (r.error === '需要认证') logout();
 }
 
 function readFile(file) {
@@ -75,5 +114,5 @@ document.addEventListener('DOMContentLoaded', () => {
   drop.ondragleave = () => drop.classList.remove('dragover');
   drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('dragover'); if (e.dataTransfer.files[0]) readFile(e.dataTransfer.files[0]); };
   input.onchange = (e) => { if (e.target.files[0]) readFile(e.target.files[0]); };
-  refreshStats();
+  checkLogin();
 });

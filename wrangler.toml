@@ -4,6 +4,7 @@ main = "src/index.js"
 compatibility_date = "2025-08-22"
 
 [vars]
+AUTH_TOKEN = "your-secret-token-here"
 
 [[kv_namespaces]]
 binding = "BING_KV"

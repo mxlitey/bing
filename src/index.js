@@ -10,6 +10,28 @@ const getMonthKey = (date) => PREFIX + date.substring(0, 6);
 const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || [];
 const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).sort().reverse();
 
+function filterFields(data, fields) {
+  if (!fields) return data;
+  const fieldList = fields.split(',').map(f => f.trim()).filter(Boolean);
+  if (!fieldList.length) return data;
+  
+  if (Array.isArray(data)) {
+    return data.map(item => {
+      const filtered = {};
+      for (const f of fieldList) {
+        if (item[f] !== undefined) filtered[f] = item[f];
+      }
+      return filtered;
+    });
+  }
+  
+  const filtered = {};
+  for (const f of fieldList) {
+    if (data[f] !== undefined) filtered[f] = data[f];
+  }
+  return filtered;
+}
+
 async function saveMonthData(env, key, data) {
   await env.BING_KV.put(key, JSON.stringify(data));
   return true;
@@ -94,13 +116,35 @@ async function handleExport(params, env) {
   return all;
 }
 
+function checkAuth(request, env) {
+  const auth = request.headers.get('Authorization');
+  if (!auth || !auth.startsWith('Bearer ')) return false;
+  const token = auth.slice(7);
+  return token === env.AUTH_TOKEN;
+}
+
+function needAuth() {
+  return new Response(JSON.stringify({ error: '需要认证' }), {
+    status: 401,
+    headers: { 'content-type': 'application/json; charset=UTF-8', 'WWW-Authenticate': 'Bearer' }
+  });
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
+    const fields = url.searchParams.get('fields');
 
-    if (path === '/json') return json(await getAllData(env));
-    if (path === '/update') return json(await updateBing(env));
+    if (path === '/json') return json(filterFields(await getAllData(env), fields));
+
+    if (path === '/api/login' && request.method === 'POST') {
+      const { token } = await request.json();
+      if (token === env.AUTH_TOKEN) {
+        return json({ success: true, token });
+      }
+      return json({ success: false, error: '认证失败' }, 401);
+    }
 
     if (path === '/api/stats') {
       const keys = await getAllKeys(env);
@@ -124,21 +168,34 @@ export default {
 
     if (/^\/\d{6}$/.test(path)) {
       const data = await env.BING_KV.get(PREFIX + path.slice(1), 'json');
-      return data ? json(data) : json({ error: '不存在' }, 404);
+      return data ? json(filterFields(data, fields)) : json({ error: '不存在' }, 404);
     }
 
-    if (path === '/api/import' && request.method === 'POST') {
-      return json(await handleImport(await request.json(), env));
+    if (/^\/\d{8}$/.test(path)) {
+      const dateNum = path.slice(1);
+      const monthKey = PREFIX + dateNum.substring(0, 6);
+      const monthData = await getMonthData(env, monthKey);
+      const item = monthData.find(i => i.date === dateNum);
+      return item ? json(filterFields(item, fields)) : json({ error: '不存在' }, 404);
     }
 
     if (path === '/api/export') {
       const data = await handleExport(url.searchParams, env);
+      const result = filterFields(data, fields);
       if (url.searchParams.get('download') === '1') {
-        return new Response(JSON.stringify(data, null, 2), {
+        return new Response(JSON.stringify(result, null, 2), {
           headers: { 'content-type': 'application/json; charset=UTF-8', 'Content-Disposition': 'attachment; filename="bing_wallpapers.json"' }
         });
       }
-      return json(data);
+      return json(result);
+    }
+
+    if (!checkAuth(request, env)) return needAuth();
+
+    if (path === '/update') return json(await updateBing(env));
+
+    if (path === '/api/import' && request.method === 'POST') {
+      return json(await handleImport(await request.json(), env));
     }
 
     if (path === '/api/delete-month' && request.method === 'POST') {
