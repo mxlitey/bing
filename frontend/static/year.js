@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const API_BASE = '__API_BASE__';
 
 async function loadYear() {
   const year = location.pathname.split('/')[1];
@@ -9,7 +10,7 @@ async function loadYear() {
   }
   
   try {
-    const data = await fetch(`/api/year/${year}`).then(r => r.json());
+    const data = await fetch(`${API_BASE}/api/year/${year}`).then(r => r.json());
     if (!data.length) return document.querySelector('.loading').textContent = '暂无数据';
     
     $('yearTitle').textContent = `${year} 年`;
@@ -32,8 +33,9 @@ function renderYear(data, year) {
   
   $('chronicle').innerHTML = Object.keys(months).sort().reverse().map(m => {
     const items = months[m];
+    const monthNum = m.slice(4, 6);
     return `<section class="month-section" id="m${m}">
-      <a href="/${m}" class="month-title-link"><h2 class="month-title">${MONTHS[+m.slice(4,6)-1]}</h2></a>
+      <a href="/${year}/${monthNum}" class="month-title-link"><h2 class="month-title">${MONTHS[+monthNum-1]}</h2></a>
       <div class="thumb-grid">${items.map(item => 
         `<div class="thumb-item" onclick="window.open('${item.url}','_blank')">
           <img data-src="${item.url.replace('_UHD.jpg','_800x480.jpg')}" data-fallback="${item.url}" class="lazy-img">

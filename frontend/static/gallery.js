@@ -1,13 +1,14 @@
 const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const API_BASE = '__API_BASE__';
 
 let allData = [], years = [], groupedData = {};
 
 async function loadData() {
   try {
     [allData, years] = await Promise.all([
-      fetch('/json').then(r => r.json()),
-      fetch('/api/years').then(r => r.json())
+      fetch(`${API_BASE}/json`).then(r => r.json()),
+      fetch(`${API_BASE}/api/years`).then(r => r.json())
     ]);
     if (allData.length) renderHero(allData[0]);
     groupData();

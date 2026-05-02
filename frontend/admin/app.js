@@ -1,10 +1,11 @@
 const $ = (id) => document.getElementById(id);
+const API_BASE = '__API_BASE__';
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('token');
   if (token && !opts.skipAuth) {
     opts.headers = { ...opts.headers, 'Authorization': `Bearer ${token}` };
   }
-  return (await fetch(path, opts)).json();
+  return (await fetch(API_BASE + path, opts)).json();
 };
 
 function toast(msg, type = 'info') {
@@ -30,17 +31,6 @@ function updateThemeButtons(activeTheme) {
   document.querySelectorAll('.theme-btn').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.theme === activeTheme);
   });
-}
-
-function switchView(showId, hideId) {
-  const showEl = $(showId);
-  const hideEl = $(hideEl);
-  
-  hideEl.classList.add('hidden');
-  showEl.classList.remove('hidden');
-  showEl.style.animation = 'none';
-  showEl.offsetHeight;
-  showEl.style.animation = null;
 }
 
 function showMainView() {
@@ -164,7 +154,7 @@ async function importData(data) {
 function exportData(download = false) {
   const start = $('exportStart').value;
   const end = $('exportEnd').value;
-  let url = '/api/export?';
+  let url = API_BASE + '/api/export?';
   if (start) url += `start=${start}&`;
   if (end) url += `end=${end}&`;
   if (download) url += 'download=1';

@@ -1,0 +1,13 @@
+name = "bing-wallpaper"
+compatibility_date = "2024-01-01"
+pages_build_output_dir = "."
+
+[vars]
+AUTH_TOKEN = "your-secure-token-here"
+
+[[kv_namespaces]]
+binding = "BING_KV"
+id = "your-kv-namespace-id"
+
+[triggers]
+crons = ["0 0 * * *"]

@@ -3,7 +3,12 @@ const PREFIX = 'bing_';
 
 const json = (data, status = 200) => new Response(JSON.stringify(data, null, 2), {
   status,
-  headers: { 'content-type': 'application/json; charset=UTF-8', 'Access-Control-Allow-Origin': '*' }
+  headers: { 
+    'content-type': 'application/json; charset=UTF-8', 
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+  }
 });
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
@@ -41,11 +46,6 @@ async function getAllData(env) {
     if (d) all.push(...d);
   }
   return all.sort((a, b) => b.date.localeCompare(a.date));
-}
-
-async function getLatest(env) {
-  const all = await getAllData(env);
-  return all[0] || null;
 }
 
 async function getYearData(env, year) {
@@ -146,12 +146,26 @@ function checkAuth(request, env) {
 function needAuth() {
   return new Response(JSON.stringify({ error: '需要认证' }), {
     status: 401,
-    headers: { 'content-type': 'application/json; charset=UTF-8', 'WWW-Authenticate': 'Bearer' }
+    headers: { 
+      'content-type': 'application/json; charset=UTF-8', 
+      'WWW-Authenticate': 'Bearer',
+      'Access-Control-Allow-Origin': '*'
+    }
   });
 }
 
 export default {
   async fetch(request, env) {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        }
+      });
+    }
+
     const url = new URL(request.url);
     const path = url.pathname;
     const fields = url.searchParams.get('fields');
@@ -159,7 +173,8 @@ export default {
     if (path === '/json') return json(filterFields(await getAllData(env), fields));
     
     if (path === '/api/latest') {
-      const latest = await getLatest(env);
+      const all = await getAllData(env);
+      const latest = all[0];
       return latest ? json(latest) : json({ error: '暂无数据' }, 404);
     }
 
@@ -205,7 +220,11 @@ export default {
       const result = filterFields(data, fields);
       if (url.searchParams.get('download') === '1') {
         return new Response(JSON.stringify(result, null, 2), {
-          headers: { 'content-type': 'application/json; charset=UTF-8', 'Content-Disposition': 'attachment; filename="bing_wallpapers.json"' }
+          headers: { 
+            'content-type': 'application/json; charset=UTF-8', 
+            'Content-Disposition': 'attachment; filename="bing_wallpapers.json"',
+            'Access-Control-Allow-Origin': '*'
+          }
         });
       }
       return json(result);
@@ -227,7 +246,7 @@ export default {
       return json({ success: true, message: `已删除 ${month}` });
     }
 
-    return env.ASSETS.fetch(request);
+    return json({ error: 'Not Found' }, 404);
   },
 
   async scheduled(_, env, ctx) {

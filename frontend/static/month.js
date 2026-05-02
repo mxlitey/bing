@@ -1,5 +1,6 @@
 const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
+const API_BASE = '__API_BASE__';
 
 async function loadMonth() {
   const pathParts = location.pathname.split('/').filter(Boolean);
@@ -14,7 +15,7 @@ async function loadMonth() {
   const monthNum = +month;
   
   try {
-    const data = await fetch(`/api/month/${monthKey}`).then(r => r.json());
+    const data = await fetch(`${API_BASE}/api/month/${monthKey}`).then(r => r.json());
     if (!data.length) return document.querySelector('.loading').textContent = '暂无数据';
     
     $('yearLink').href = `/${year}`;

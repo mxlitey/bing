@@ -1,4 +1,4 @@
-name: Deploy to Cloudflare Workers
+name: Deploy to Cloudflare
 
 on:
   push:
@@ -13,6 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check API_BASE_URL
+        run: |
+          if [ -z "${{ secrets.API_BASE_URL }}" ]; then
+            echo "ERROR: API_BASE_URL secret is not set"
+            exit 1
+          fi
+          echo "API_BASE_URL is configured"
+
       - run: npm install -g wrangler
 
       - name: Setup KV namespace
@@ -23,8 +31,22 @@ jobs:
           [ -z "$KV_ID" ] && { echo "ERROR: Failed to get KV ID"; exit 1; }
           echo "KV_ID=$KV_ID" >> $GITHUB_ENV
 
-      - name: Configure and Deploy
+      - name: Deploy Backend API
+        working-directory: backend
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
-          sed -i "s/AUTH_TOKEN = \"your-secret-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
+          sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
           wrangler deploy
+
+      - name: Inject API_BASE and Deploy Frontend
+        working-directory: frontend
+        run: |
+          API_URL="${{ secrets.API_BASE_URL }}"
+          
+          sed -i "s|__API_BASE__|$API_URL|g" static/*.js
+          sed -i "s|__API_BASE__|$API_URL|g" admin/app.js
+          
+          sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
+          sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
+          
+          wrangler pages deploy . --project-name=bing-wallpaper
