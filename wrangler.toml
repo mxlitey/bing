@@ -1,6 +1,10 @@
-name = "api"
+name = "bing"
 main = "src/index.js"
 compatibility_date = "2024-01-01"
+
+[assets]
+directory = "public"
+binding = "ASSETS"
 
 [vars]
 AUTH_TOKEN = "your-secure-token-here"

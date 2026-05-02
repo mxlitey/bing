@@ -1,12 +1,12 @@
 const $ = (id) => document.getElementById(id);
-const API_BASE = '__API_BASE__'.replace(/\/$/, '');
+
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('token');
   opts.headers = opts.headers || {};
   if (token && !opts.skipAuth) {
     opts.headers['Authorization'] = `Bearer ${token}`;
   }
-  return (await fetch(API_BASE + path, opts)).json();
+  return (await fetch(path, opts)).json();
 };
 
 function toast(msg, type = 'info') {
@@ -56,7 +56,7 @@ async function login() {
   btn.innerHTML = '<span>验证中...</span>';
   
   try {
-    const response = await fetch(API_BASE + '/api/login', {
+    const response = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
@@ -161,7 +161,7 @@ async function importData(data) {
 function exportData(download = false) {
   const start = $('exportStart').value;
   const end = $('exportEnd').value;
-  let url = API_BASE + '/api/export?';
+  let url = '/api/export?';
   if (start) url += `start=${start}&`;
   if (end) url += `end=${end}&`;
   if (download) url += 'download=1';

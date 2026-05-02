@@ -13,16 +13,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Check API_BASE_URL
-        run: |
-          API_URL="${{ vars.API_BASE_URL }}"
-          if [ -z "$API_URL" ]; then
-            echo "ERROR: API_BASE_URL variable is not set"
-            exit 1
-          fi
-          echo "API_BASE_URL=$API_URL" >> $GITHUB_ENV
-          echo "API_BASE_URL is configured: $API_URL"
-
       - run: npm install -g wrangler
 
       - name: Setup KV namespace
@@ -33,34 +23,9 @@ jobs:
           [ -z "$KV_ID" ] && { echo "ERROR: Failed to get KV ID"; exit 1; }
           echo "KV_ID=$KV_ID" >> $GITHUB_ENV
 
-      - name: Deploy Backend API
-        working-directory: backend
+      - name: Deploy
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
           sed -i '/^AUTH_TOKEN/d' wrangler.toml
           echo "AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"" >> wrangler.toml
           wrangler deploy
-
-      - name: Inject API_BASE and Deploy Frontend
-        working-directory: frontend
-        run: |
-          echo "Injecting API_BASE: $API_BASE_URL"
-          echo "API_BASE length: ${#API_BASE_URL}"
-          
-          API_BASE_CLEAN="${API_BASE_URL%/}"
-          echo "API_BASE (no trailing slash): $API_BASE_CLEAN"
-          
-          echo "Directory structure:"
-          find . -type f -name "*.html" | head -20
-          
-          echo "Replacing __API_BASE__ in JS files..."
-          find . -name "*.js" -type f -exec sed -i "s|__API_BASE__|${API_BASE_CLEAN}|g" {} \;
-          
-          echo "Verifying injection in admin/app.js:"
-          grep "API_BASE" admin/app.js | head -3
-          
-          echo "Verifying injection in static/gallery.js:"
-          grep "API_BASE" static/gallery.js | head -3
-          
-          wrangler pages project create bing --production-branch=main 2>/dev/null || true
-          wrangler pages deploy . --project-name=bing --commit-dirty=true

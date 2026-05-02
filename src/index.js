@@ -183,7 +183,7 @@ function needAuth() {
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         headers: {
@@ -284,7 +284,7 @@ export default {
       return json({ success: true, message: `已删除 ${month}` });
     }
 
-    return json({ error: 'Not Found' }, 404);
+    return env.ASSETS.fetch(request);
   },
 
   async scheduled(_, env, ctx) {

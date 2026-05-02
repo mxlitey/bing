@@ -1,9 +1,5 @@
 const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-const API_BASE = '__API_BASE__'.replace(/\/$/, '');
-if (API_BASE === '__API_BASE__') {
-  console.error('API_BASE not configured. Please set API_BASE_URL in GitHub Variables.');
-}
 
 let allData = [], years = [], groupedData = {};
 let scrollTimeout = null;
@@ -11,8 +7,8 @@ let scrollTimeout = null;
 async function loadData() {
   try {
     [allData, years] = await Promise.all([
-      fetch(`${API_BASE}/json`).then(r => r.json()),
-      fetch(`${API_BASE}/api/years`).then(r => r.json())
+      fetch('/json').then(r => r.json()),
+      fetch('/api/years').then(r => r.json())
     ]);
     if (allData.length) renderHero(allData[0]);
     groupData();
@@ -81,7 +77,7 @@ function renderTimeline() {
       </a>
       <div class="timeline-sub">${months.map(m => {
         const monthNum = m.slice(4, 6);
-        return `<a href="#m${m}" class="timeline-sub-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
+        return `<a href="#m${m}" class="timeline-sub-item" data-month="${m}" data-year="${year}" onclick="scrollToMonth('${m}', '${year}'); return false;"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
       }).join('')}</div>
     </div>`;
   }).join('');
@@ -94,6 +90,18 @@ function toggleYear(year) {
     g.classList.toggle('expanded', g.dataset.year === year && !g.classList.contains('expanded'));
     if (g.dataset.year !== year) g.classList.remove('expanded');
   });
+}
+
+function scrollToMonth(month, year) {
+  const el = $('m' + month);
+  if (el) {
+    const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
+    if (group) {
+      document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
+      group.classList.add('expanded');
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 }
 
 function initObservers() {
