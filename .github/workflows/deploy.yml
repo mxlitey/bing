@@ -49,4 +49,5 @@ jobs:
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
           sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
           
+          wrangler pages project create bing --production-branch=main 2>/dev/null || true
           wrangler pages deploy . --project-name=bing --commit-dirty=true
