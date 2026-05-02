@@ -8,6 +8,3 @@ AUTH_TOKEN = "your-secure-token-here"
 [[kv_namespaces]]
 binding = "BING_KV"
 id = "your-kv-namespace-id"
-
-[triggers]
-crons = ["0 0 * * *"]
