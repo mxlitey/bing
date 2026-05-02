@@ -43,8 +43,18 @@ jobs:
       - name: Inject API_BASE and Deploy Frontend
         working-directory: frontend
         run: |
-          sed -i "s|__API_BASE__|$API_BASE_URL|g" static/*.js
-          sed -i "s|__API_BASE__|$API_BASE_URL|g" admin/app.js
+          echo "Injecting API_BASE: $API_BASE_URL"
+          echo "API_BASE length: ${#API_BASE_URL}"
+          
+          ESCAPED_URL=$(echo "$API_BASE_URL" | sed 's/[\/&]/\\&/g')
+          echo "Escaped URL: $ESCAPED_URL"
+          
+          for file in $(find . -name "*.js" -type f); do
+            sed -i "s|__API_BASE__|$ESCAPED_URL|g" "$file"
+          done
+          
+          echo "Verifying injection:"
+          grep "API_BASE" static/gallery.js || echo "Not found in gallery.js"
           
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
           sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
