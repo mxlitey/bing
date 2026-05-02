@@ -3,6 +3,7 @@ const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', 
 
 let allData = [];
 let years = [];
+let groupedData = {};
 
 async function loadData() {
   try {
@@ -17,12 +18,24 @@ async function loadData() {
       renderHero(allData[0]);
     }
     
+    groupData();
     renderChronicle();
     renderTimeline();
     initScrollObserver();
   } catch (err) {
     $('loading').textContent = '加载失败: ' + err.message;
   }
+}
+
+function groupData() {
+  groupedData = {};
+  allData.forEach(item => {
+    const year = item.date.substring(0, 4);
+    const month = item.date.substring(0, 6);
+    if (!groupedData[year]) groupedData[year] = {};
+    if (!groupedData[year][month]) groupedData[year][month] = [];
+    groupedData[year][month].push(item);
+  });
 }
 
 function renderHero(latest) {
@@ -48,20 +61,11 @@ function renderChronicle() {
   
   loading.remove();
   
-  const grouped = {};
-  allData.forEach(item => {
-    const year = item.date.substring(0, 4);
-    const month = item.date.substring(0, 6);
-    if (!grouped[year]) grouped[year] = {};
-    if (!grouped[year][month]) grouped[year][month] = [];
-    grouped[year][month].push(item);
-  });
-  
   let html = '';
   years.forEach(year => {
-    if (!grouped[year]) return;
+    if (!groupedData[year]) return;
     
-    const yearData = grouped[year];
+    const yearData = groupedData[year];
     const months = Object.keys(yearData).sort().reverse();
     let totalCount = 0;
     months.forEach(m => totalCount += yearData[m].length);
@@ -82,7 +86,7 @@ function renderChronicle() {
       
       items.forEach(item => {
         html += `<a href="/${item.date}" class="thumb-item" data-date="${item.date}" data-month="${monthKey}">
-          <img src="${item.url}?w=400" alt="${item.copyright}" loading="lazy">
+          <img src="${item.url}" alt="${item.copyright}" loading="lazy">
           <div class="thumb-date">${item.date.substring(6, 8)}</div>
         </a>`;
       });
@@ -102,13 +106,37 @@ function renderTimeline() {
   
   let html = '';
   years.forEach(year => {
-    html += `<a href="#y${year}" class="timeline-item" data-year="${year}">
-      <span class="timeline-dot"></span>
-      <span>${year}</span>
-    </a>`;
+    if (!groupedData[year]) return;
+    
+    const months = Object.keys(groupedData[year]).sort().reverse();
+    const monthItems = months.map(monthKey => {
+      const monthNum = parseInt(monthKey.substring(4, 6));
+      return `<a href="#m${monthKey}" class="timeline-sub-item" data-month="${monthKey}">
+        <span class="timeline-dot"></span>
+        <span>${monthNames[monthNum - 1]}</span>
+      </a>`;
+    }).join('');
+    
+    html += `<div class="timeline-group" data-year="${year}">
+      <div class="timeline-item" onclick="toggleTimelineGroup('${year}')">
+        <span class="timeline-dot"></span>
+        <span>${year}</span>
+        <svg class="timeline-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M6 9l6 6 6-6"/>
+        </svg>
+      </div>
+      <div class="timeline-sub">${monthItems}</div>
+    </div>`;
   });
   
   sidebar.innerHTML = html;
+}
+
+function toggleTimelineGroup(year) {
+  const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
+  if (group) {
+    group.classList.toggle('expanded');
+  }
 }
 
 function initScrollObserver() {
@@ -121,8 +149,8 @@ function initScrollObserver() {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const year = entry.target.id.replace('y', '');
-        document.querySelectorAll('.timeline-item').forEach(item => {
-          item.classList.toggle('active', item.dataset.year === year);
+        document.querySelectorAll('.timeline-group').forEach(group => {
+          group.classList.toggle('active', group.dataset.year === year);
         });
       }
     });
