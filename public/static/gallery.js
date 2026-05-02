@@ -6,10 +6,10 @@ let scrollTimeout = null;
 
 async function loadData() {
   try {
-    [allData, years] = await Promise.all([
-      fetch('/json').then(r => r.json()),
-      fetch('/api/years').then(r => r.json())
-    ]);
+    const cached = await fetch('/json').then(r => r.json());
+    allData = cached.data || cached;
+    years = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
+    
     if (allData.length) renderHero(allData[0]);
     groupData();
     renderChronicle();

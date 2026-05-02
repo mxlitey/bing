@@ -1,7 +1,7 @@
 const BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
 const PREFIX = 'bing_';
 const CACHE_KEY = 'cache_all_data';
-const CACHE_TTL = 300;
+const CACHE_TTL = 86400;
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -15,7 +15,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
 const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || [];
-const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).sort().reverse();
+const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).filter(k => !k.startsWith('cache_')).sort().reverse();
 
 function filterFields(data, fields) {
   if (!fields) return data;
@@ -35,24 +35,7 @@ function filterFields(data, fields) {
   return filtered;
 }
 
-async function clearCache(env) {
-  await env.BING_KV.delete(CACHE_KEY);
-}
-
-async function saveMonthData(env, key, data) {
-  await env.BING_KV.put(key, JSON.stringify(data));
-  await clearCache(env);
-  return true;
-}
-
-async function getAllData(env, useCache = true) {
-  if (useCache) {
-    const cached = await env.BING_KV.get(CACHE_KEY, 'json');
-    if (cached && cached.data && cached.years) {
-      return cached;
-    }
-  }
-  
+async function buildCache(env) {
   const keys = await getAllKeys(env);
   const promises = keys.map(k => env.BING_KV.get(k, 'json'));
   const results = await Promise.all(promises);
@@ -74,6 +57,23 @@ async function getAllData(env, useCache = true) {
   await env.BING_KV.put(CACHE_KEY, JSON.stringify(cacheData), { expirationTtl: CACHE_TTL });
   
   return cacheData;
+}
+
+async function getAllData(env) {
+  const cached = await env.BING_KV.get(CACHE_KEY, 'json');
+  if (cached && cached.data && cached.years) {
+    return cached;
+  }
+  return await buildCache(env);
+}
+
+async function clearCache(env) {
+  await env.BING_KV.delete(CACHE_KEY);
+}
+
+async function saveMonthData(env, key, data) {
+  await env.BING_KV.put(key, JSON.stringify(data));
+  await clearCache(env);
 }
 
 async function getYearData(env, year) {
@@ -144,9 +144,10 @@ async function handleImport(body, env) {
       imported++;
     }
     existing.sort((a, b) => a.date.localeCompare(b.date));
-    await saveMonthData(env, key, existing);
+    await env.BING_KV.put(key, JSON.stringify(existing));
   }
 
+  await buildCache(env);
   return { success: true, imported, skipped, months: Object.keys(monthMap).length };
 }
 
@@ -280,7 +281,7 @@ export default {
       const { month } = await request.json();
       if (!month) return json({ success: false, error: '缺少月份' }, 400);
       await env.BING_KV.delete(PREFIX + month.replace('-', ''));
-      await clearCache(env);
+      await buildCache(env);
       return json({ success: true, message: `已删除 ${month}` });
     }
 
@@ -288,6 +289,8 @@ export default {
   },
 
   async scheduled(_, env, ctx) {
-    ctx.waitUntil(updateBing(env));
+    ctx.waitUntil(
+      updateBing(env).then(() => buildCache(env))
+    );
   }
 };
