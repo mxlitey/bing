@@ -190,4 +190,7 @@ function updateUI(year, month) {
   });
 }
 
-document.addEventListener('DOMContentLoaded', loadData);
+document.addEventListener('DOMContentLoaded', () => {
+  window.scrollTo(0, 0);
+  loadData();
+});
