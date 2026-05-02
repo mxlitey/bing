@@ -93,7 +93,7 @@ function toggleYear(year) {
 }
 
 function initObservers() {
-  const imgOpts = { rootMargin: '200px 0px', threshold: 0.01 };
+  const imgOpts = { rootMargin: '50px 0px', threshold: 0.01 };
   const scrollOpts = { threshold: 0, rootMargin: '-50% 0px -50% 0px' };
   
   const imgObserver = new IntersectionObserver(entries => {
@@ -101,8 +101,14 @@ function initObservers() {
       if (e.isIntersecting) {
         const img = e.target;
         if (img.dataset.src && !img.src) {
-          img.onload = () => img.removeAttribute('data-src');
-          img.onerror = () => img.src = img.dataset.fallback;
+          img.onload = () => {
+            img.removeAttribute('data-src');
+            img.classList.add('loaded');
+          };
+          img.onerror = () => {
+            img.src = img.dataset.fallback;
+            img.classList.add('loaded');
+          };
           img.src = img.dataset.src;
           imgObserver.unobserve(img);
         }

@@ -50,6 +50,9 @@ jobs:
           API_BASE_CLEAN="${API_BASE_URL%/}"
           echo "API_BASE (no trailing slash): $API_BASE_CLEAN"
           
+          echo "Directory structure:"
+          find . -type f -name "*.html" | head -20
+          
           echo "Replacing __API_BASE__ in JS files..."
           find . -name "*.js" -type f -exec sed -i "s|__API_BASE__|${API_BASE_CLEAN}|g" {} \;
           

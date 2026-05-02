@@ -48,13 +48,19 @@ function initObserver() {
     entries.forEach(e => {
       if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
         const img = e.target;
-        img.onload = () => img.removeAttribute('data-src');
-        img.onerror = () => img.src = img.dataset.fallback;
+        img.onload = () => {
+          img.removeAttribute('data-src');
+          img.classList.add('loaded');
+        };
+        img.onerror = () => {
+          img.src = img.dataset.fallback;
+          img.classList.add('loaded');
+        };
         img.src = img.dataset.src;
         observer.unobserve(img);
       }
     });
-  }, { rootMargin: '100px 0px', threshold: 0.01 });
+  }, { rootMargin: '50px 0px', threshold: 0.01 });
   
   document.querySelectorAll('.lazy-img').forEach(img => observer.observe(img));
 }
