@@ -6,6 +6,8 @@ if (API_BASE === '__API_BASE__') {
 }
 
 let allData = [], years = [], groupedData = {};
+let isScrolling = false;
+let scrollTimer = null;
 
 async function loadData() {
   try {
@@ -97,6 +99,7 @@ function initObservers() {
   const scrollOpts = { threshold: 0, rootMargin: '-50% 0px -50% 0px' };
   
   const imgObserver = new IntersectionObserver(entries => {
+    if (isScrolling) return;
     entries.forEach(e => {
       if (e.isIntersecting) {
         const img = e.target;
@@ -143,13 +146,36 @@ function initObservers() {
   document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
   document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
   
-  const onScroll = () => {
+  window.addEventListener('scroll', () => {
+    isScrolling = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      isScrolling = false;
+      imgObserver.takeRecords().forEach(e => {
+        if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
+          const img = e.target;
+          img.onload = () => {
+            img.removeAttribute('data-src');
+            img.classList.add('loaded');
+          };
+          img.onerror = () => {
+            img.src = img.dataset.fallback;
+            img.classList.add('loaded');
+          };
+          img.src = img.dataset.src;
+          imgObserver.unobserve(img);
+        }
+      });
+    }, 150);
+    
     const show = window.scrollY > heroHeight * 0.5;
     $('timelineSidebar').classList.toggle('visible', show);
     $('floatingInfo')?.classList.toggle('visible', show);
-  };
-  window.addEventListener('scroll', onScroll, { passive: true });
-  onScroll();
+  }, { passive: true });
+  
+  const show = window.scrollY > heroHeight * 0.5;
+  $('timelineSidebar').classList.toggle('visible', show);
+  $('floatingInfo')?.classList.toggle('visible', show);
 }
 
 function updateUI(year, month) {

@@ -2,6 +2,9 @@ const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 const API_BASE = '__API_BASE__'.replace(/\/$/, '');
 
+let isScrolling = false;
+let scrollTimer = null;
+
 async function loadYear() {
   const year = location.pathname.split('/')[1];
   
@@ -56,6 +59,7 @@ function renderTimeline(data) {
 
 function initObservers() {
   const imgObserver = new IntersectionObserver(entries => {
+    if (isScrolling) return;
     entries.forEach(e => {
       if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
         const img = e.target;
@@ -87,6 +91,29 @@ function initObservers() {
   }, { threshold: 0.3, rootMargin: '-20% 0px -60% 0px' });
   
   document.querySelectorAll('.month-section').forEach(s => scrollObserver.observe(s));
+  
+  window.addEventListener('scroll', () => {
+    isScrolling = true;
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(() => {
+      isScrolling = false;
+      imgObserver.takeRecords().forEach(e => {
+        if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
+          const img = e.target;
+          img.onload = () => {
+            img.removeAttribute('data-src');
+            img.classList.add('loaded');
+          };
+          img.onerror = () => {
+            img.src = img.dataset.fallback;
+            img.classList.add('loaded');
+          };
+          img.src = img.dataset.src;
+          imgObserver.unobserve(img);
+        }
+      });
+    }, 150);
+  }, { passive: true });
 }
 
 document.addEventListener('DOMContentLoaded', loadYear);
