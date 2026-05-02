@@ -52,7 +52,7 @@ function renderYear(data) {
       <h2 class="month-title">${monthNames[monthNum - 1]}</h2>
       <div class="thumb-grid">
         ${items.map(item => {
-          const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
+          const thumbUrl = item.url.replace('_UHD.jpg', '_480x300.jpg');
           return `<a href="/${item.date}" class="thumb-item" data-date="${item.date}">
             <img src="${thumbUrl}" alt="${item.copyright}" loading="lazy">
             <div class="thumb-date">${item.date.substring(6, 8)}</div>
