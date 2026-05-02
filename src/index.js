@@ -6,8 +6,6 @@ const json = (data, status = 200) => new Response(JSON.stringify(data, null, 2),
   headers: { 'content-type': 'application/json; charset=UTF-8', 'Access-Control-Allow-Origin': '*' }
 });
 
-const redirect = (url) => new Response(null, { status: 302, headers: { 'Location': url } });
-
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
 const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || [];
 const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).sort().reverse();
@@ -20,17 +18,13 @@ function filterFields(data, fields) {
   if (Array.isArray(data)) {
     return data.map(item => {
       const filtered = {};
-      for (const f of fieldList) {
-        if (item[f] !== undefined) filtered[f] = item[f];
-      }
+      for (const f of fieldList) if (item[f] !== undefined) filtered[f] = item[f];
       return filtered;
     });
   }
   
   const filtered = {};
-  for (const f of fieldList) {
-    if (data[f] !== undefined) filtered[f] = data[f];
-  }
+  for (const f of fieldList) if (data[f] !== undefined) filtered[f] = data[f];
   return filtered;
 }
 
@@ -109,8 +103,7 @@ async function handleImport(body, env) {
   for (const item of items) {
     if (!item.date) continue;
     const key = getMonthKey(item.date);
-    if (!monthMap[key]) monthMap[key] = [];
-    monthMap[key].push(item);
+    (monthMap[key] ??= []).push(item);
   }
 
   let imported = 0, skipped = 0;
@@ -147,8 +140,7 @@ async function handleExport(params, env) {
 function checkAuth(request, env) {
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return false;
-  const token = auth.slice(7);
-  return token === env.AUTH_TOKEN;
+  return auth.slice(7) === env.AUTH_TOKEN;
 }
 
 function needAuth() {
@@ -171,32 +163,21 @@ export default {
       return latest ? json(latest) : json({ error: '暂无数据' }, 404);
     }
 
-    if (path === '/api/years') {
-      return json(await getYears(env));
-    }
+    if (path === '/api/years') return json(await getYears(env));
 
     if (path.startsWith('/api/year/')) {
       const match = path.match(/^\/api\/year\/(\d{4})$/);
-      if (match) {
-        const data = await getYearData(env, match[1]);
-        return json(data);
-      }
+      if (match) return json(await getYearData(env, match[1]));
     }
 
     if (path.startsWith('/api/month/')) {
       const match = path.match(/^\/api\/month\/(\d{6})$/);
-      if (match) {
-        const data = await getMonthData(env, PREFIX + match[1]);
-        return json(data);
-      }
+      if (match) return json(await getMonthData(env, PREFIX + match[1]));
     }
 
     if (path === '/api/login' && request.method === 'POST') {
       const { token } = await request.json();
-      if (token === env.AUTH_TOKEN) {
-        return json({ success: true, token });
-      }
-      return json({ success: false, error: '认证失败' }, 401);
+      return token === env.AUTH_TOKEN ? json({ success: true, token }) : json({ success: false, error: '认证失败' }, 401);
     }
 
     if (path === '/api/stats') {
@@ -230,33 +211,8 @@ export default {
       return json(result);
     }
 
-    if (/^\/\d{8}$/.test(path)) {
-      const dateNum = path.slice(1);
-      const monthKey = PREFIX + dateNum.substring(0, 6);
-      const monthData = await getMonthData(env, monthKey);
-      const item = monthData.find(i => i.date === dateNum);
-      if (item) {
-        return redirect(item.url);
-      }
-      return new Response('<h1>未找到该日期的壁纸</h1><a href="/">返回首页</a>', {
-        status: 404,
-        headers: { 'content-type': 'text/html; charset=UTF-8' }
-      });
-    }
-
-    if (/^\/\d{6}$/.test(path)) {
-      const month = path.slice(1);
-      return redirect(`/month/?m=${month}`);
-    }
-
-    if (/^\/\d{4}$/.test(path)) {
-      const year = path.slice(1);
-      return redirect(`/year/?y=${year}`);
-    }
-
-    if (path.startsWith('/api/import') || path === '/update' || path === '/api/delete-month') {
-      if (!checkAuth(request, env)) return needAuth();
-    }
+    const protectedPaths = ['/api/import', '/update', '/api/delete-month'];
+    if (protectedPaths.some(p => path.startsWith(p)) && !checkAuth(request, env)) return needAuth();
 
     if (path === '/update') return json(await updateBing(env));
 

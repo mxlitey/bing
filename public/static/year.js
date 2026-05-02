@@ -1,135 +1,76 @@
-const $ = (id) => document.getElementById(id);
-const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-
-let imageObserver = null;
+const $ = id => document.getElementById(id);
+const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 async function loadYear() {
-  const params = new URLSearchParams(window.location.search);
-  const year = params.get('y');
+  const year = location.pathname.split('/')[1];
   
   if (!year || !/^\d{4}$/.test(year)) {
-    document.querySelector('.loading').textContent = '无效的年份参数';
-    return;
+    return document.querySelector('.loading').textContent = '无效的年份参数';
   }
   
   try {
-    const res = await fetch(`/api/year/${year}`);
-    const data = await res.json();
-    
-    if (!data.length) {
-      document.querySelector('.loading').textContent = '暂无数据';
-      return;
-    }
+    const data = await fetch(`/api/year/${year}`).then(r => r.json());
+    if (!data.length) return document.querySelector('.loading').textContent = '暂无数据';
     
     $('yearTitle').textContent = `${year} 年`;
     document.title = `${year} - Bing Wallpaper`;
     
-    renderYear(data);
+    renderYear(data, year);
     renderTimeline(data);
-    initImageObserver();
-    initScrollObserver();
+    initObservers();
   } catch (err) {
     document.querySelector('.loading').textContent = '加载失败: ' + err.message;
   }
 }
 
-function renderYear(data) {
-  const container = $('chronicle');
-  container.innerHTML = '';
+function renderYear(data, year) {
+  const months = data.reduce((acc, item) => {
+    const m = item.date.slice(0, 6);
+    (acc[m] ??= []).push(item);
+    return acc;
+  }, {});
   
-  const months = {};
-  data.forEach(item => {
-    const m = item.date.substring(0, 6);
-    if (!months[m]) months[m] = [];
-    months[m].push(item);
-  });
-  
-  Object.keys(months).sort().reverse().forEach(monthKey => {
-    const monthNum = parseInt(monthKey.substring(4, 6));
-    const items = months[monthKey];
-    
-    const section = document.createElement('section');
-    section.className = 'month-section';
-    section.id = `m${monthKey}`;
-    section.innerHTML = `
-      <a href="/${monthKey}" class="month-title-link">
-        <h2 class="month-title">${monthNames[monthNum - 1]}</h2>
-      </a>
-      <div class="thumb-grid">
-        ${items.map(item => {
-          const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
-          return `<div class="thumb-item" onclick="openImage('${item.url}')">
-            <img data-src="${thumbUrl}" data-fallback="${item.url}" alt="${item.copyright}" class="lazy-img">
-            <div class="thumb-date">${item.date.substring(6, 8)}</div>
-          </div>`;
-        }).join('')}
-      </div>
-    `;
-    container.appendChild(section);
-  });
-}
-
-function initImageObserver() {
-  const options = {
-    root: null,
-    rootMargin: '100px 0px',
-    threshold: 0.01
-  };
-  
-  imageObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const img = entry.target;
-        if (img.dataset.src && !img.src) {
-          const thumbUrl = img.dataset.src;
-          const fallbackUrl = img.dataset.fallback;
-          
-          img.onload = () => {
-            img.removeAttribute('data-src');
-            img.removeAttribute('data-fallback');
-          };
-          
-          img.onerror = () => {
-            if (img.src === thumbUrl && fallbackUrl) {
-              img.src = fallbackUrl;
-            }
-          };
-          
-          img.src = thumbUrl;
-          imageObserver.unobserve(img);
-        }
-      }
-    });
-  }, options);
-  
-  document.querySelectorAll('.lazy-img').forEach(img => {
-    imageObserver.observe(img);
-  });
+  $('chronicle').innerHTML = Object.keys(months).sort().reverse().map(m => {
+    const items = months[m];
+    return `<section class="month-section" id="m${m}">
+      <a href="/${m}" class="month-title-link"><h2 class="month-title">${MONTHS[+m.slice(4,6)-1]}</h2></a>
+      <div class="thumb-grid">${items.map(item => 
+        `<div class="thumb-item" onclick="window.open('${item.url}','_blank')">
+          <img data-src="${item.url.replace('_UHD.jpg','_800x480.jpg')}" data-fallback="${item.url}" class="lazy-img">
+          <div class="thumb-date">${item.date.slice(6,8)}</div>
+        </div>`
+      ).join('')}</div>
+    </section>`;
+  }).join('');
 }
 
 function renderTimeline(data) {
-  const sidebar = $('timelineSidebar');
-  const months = [...new Set(data.map(i => i.date.substring(0, 6)))].sort().reverse();
-  
-  sidebar.innerHTML = months.map(m => {
-    const monthNum = parseInt(m.substring(4, 6));
-    return `<a href="#m${m}" class="timeline-item" data-month="${m}">
-      <span class="timeline-dot"></span>
-      <span>${monthNames[monthNum - 1]}</span>
-    </a>`;
-  }).join('');
-  
-  sidebar.classList.add('visible');
+  const months = [...new Set(data.map(i => i.date.slice(0, 6)))].sort().reverse();
+  $('timelineSidebar').innerHTML = months.map(m => 
+    `<a href="#m${m}" class="timeline-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+m.slice(4,6)-1]}</span></a>`
+  ).join('');
+  $('timelineSidebar').classList.add('visible');
 }
 
-function initScrollObserver() {
-  const sections = document.querySelectorAll('.month-section');
-  const sidebar = $('timelineSidebar');
+function initObservers() {
+  const imgObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
+        const img = e.target;
+        img.onload = () => img.removeAttribute('data-src');
+        img.onerror = () => img.src = img.dataset.fallback;
+        img.src = img.dataset.src;
+        imgObserver.unobserve(img);
+      }
+    });
+  }, { rootMargin: '100px 0px', threshold: 0.01 });
   
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const month = entry.target.id.replace('m', '');
+  document.querySelectorAll('.lazy-img').forEach(img => imgObserver.observe(img));
+  
+  const scrollObserver = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const month = e.target.id.slice(1);
         document.querySelectorAll('.timeline-item').forEach(item => {
           item.classList.toggle('active', item.dataset.month === month);
         });
@@ -137,11 +78,7 @@ function initScrollObserver() {
     });
   }, { threshold: 0.3, rootMargin: '-20% 0px -60% 0px' });
   
-  sections.forEach(section => observer.observe(section));
-}
-
-function openImage(url) {
-  window.open(url, '_blank');
+  document.querySelectorAll('.month-section').forEach(s => scrollObserver.observe(s));
 }
 
 document.addEventListener('DOMContentLoaded', loadYear);

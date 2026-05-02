@@ -1,79 +1,61 @@
-const $ = (id) => document.getElementById(id);
-const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-
-let imageObserver = null;
+const $ = id => document.getElementById(id);
+const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
 async function loadMonth() {
-  const params = new URLSearchParams(window.location.search);
-  const month = params.get('m');
+  const pathParts = location.pathname.split('/').filter(Boolean);
+  const year = pathParts[0];
+  const month = pathParts[1];
   
-  if (!month || !/^\d{6}$/.test(month)) {
-    document.querySelector('.loading').textContent = '无效的月份参数';
-    return;
+  if (!year || !/^\d{4}$/.test(year) || !month || !/^\d{2}$/.test(month)) {
+    return document.querySelector('.loading').textContent = '无效的路径参数';
   }
   
-  const year = month.substring(0, 4);
-  const monthNum = parseInt(month.substring(4, 6));
+  const monthKey = year + month;
+  const monthNum = +month;
   
   try {
-    const res = await fetch(`/api/month/${month}`);
-    const data = await res.json();
+    const data = await fetch(`/api/month/${monthKey}`).then(r => r.json());
+    if (!data.length) return document.querySelector('.loading').textContent = '暂无数据';
     
-    if (!data.length) {
-      document.querySelector('.loading').textContent = '暂无数据';
-      return;
-    }
-    
-    $('yearLink').href = `/year/?y=${year}`;
+    $('yearLink').href = `/${year}`;
     $('yearLink').textContent = `${year}年`;
-    $('monthTitle').textContent = monthNames[monthNum - 1];
+    $('monthTitle').textContent = MONTHS[monthNum - 1];
     $('photoCount').textContent = `${data.length} 张`;
-    document.title = `${year}年${monthNames[monthNum - 1]} - Bing Wallpaper`;
+    document.title = `${year}年${MONTHS[monthNum - 1]} - Bing Wallpaper`;
     
     renderGrid(data);
-    initImageObserver();
+    initObserver();
   } catch (err) {
     document.querySelector('.loading').textContent = '加载失败: ' + err.message;
   }
 }
 
 function renderGrid(data) {
-  const grid = $('monthGrid');
-  grid.innerHTML = data.map(item => {
-    const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
-    return `<a href="/${item.date}" class="thumb-item" data-date="${item.date}">
-      <img data-src="${thumbUrl}" alt="${item.copyright}" class="lazy-img">
+  $('monthGrid').innerHTML = data.map(item => 
+    `<div class="thumb-item" onclick="window.open('${item.url}','_blank')">
+      <img data-src="${item.url.replace('_UHD.jpg','_800x480.jpg')}" data-fallback="${item.url}" class="lazy-img">
       <div class="thumb-overlay">
         <div class="thumb-date-full">${item.date}</div>
         <div class="thumb-copyright">${item.copyright}</div>
       </div>
-    </a>`;
-  }).join('');
+    </div>`
+  ).join('');
 }
 
-function initImageObserver() {
-  const options = {
-    root: null,
-    rootMargin: '100px 0px',
-    threshold: 0.01
-  };
-  
-  imageObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const img = entry.target;
-        if (img.dataset.src && !img.src) {
-          img.src = img.dataset.src;
-          img.removeAttribute('data-src');
-          imageObserver.unobserve(img);
-        }
+function initObserver() {
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
+        const img = e.target;
+        img.onload = () => img.removeAttribute('data-src');
+        img.onerror = () => img.src = img.dataset.fallback;
+        img.src = img.dataset.src;
+        observer.unobserve(img);
       }
     });
-  }, options);
+  }, { rootMargin: '100px 0px', threshold: 0.01 });
   
-  document.querySelectorAll('.lazy-img').forEach(img => {
-    imageObserver.observe(img);
-  });
+  document.querySelectorAll('.lazy-img').forEach(img => observer.observe(img));
 }
 
 document.addEventListener('DOMContentLoaded', loadMonth);
