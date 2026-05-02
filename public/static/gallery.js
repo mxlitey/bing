@@ -133,10 +133,14 @@ function renderTimeline() {
 }
 
 function toggleTimelineGroup(year) {
-  const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
-  if (group) {
-    group.classList.toggle('expanded');
-  }
+  const groups = document.querySelectorAll('.timeline-group');
+  groups.forEach(group => {
+    if (group.dataset.year === year) {
+      group.classList.toggle('expanded');
+    } else {
+      group.classList.remove('expanded');
+    }
+  });
 }
 
 function initScrollObserver() {
