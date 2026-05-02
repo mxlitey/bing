@@ -1,7 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const API_BASE = '__API_BASE__';
-console.log('API_BASE:', API_BASE);
-console.log('API_BASE is placeholder:', API_BASE === '__API_BASE__');
+const API_BASE = '__API_BASE__'.replace(/\/$/, '');
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('token');
   opts.headers = opts.headers || {};
@@ -64,23 +62,16 @@ async function login() {
       body: JSON.stringify({ token })
     });
     
-    console.log('Login response status:', response.status);
     const r = await response.json();
-    console.log('Login response:', r);
     
     if (r.success) {
       localStorage.setItem('token', token);
       showMainView();
       toast('登录成功', 'success');
     } else {
-      console.error('Login failed:', r);
       toast(r.error || 'Token 错误', 'error');
-      if (r.debug) {
-        console.log('Debug info:', r.debug);
-      }
     }
   } catch (e) {
-    console.error('Login error:', e);
     toast('请求失败: ' + e.message, 'error');
   }
   

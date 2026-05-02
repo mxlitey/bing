@@ -47,15 +47,17 @@ jobs:
           echo "Injecting API_BASE: $API_BASE_URL"
           echo "API_BASE length: ${#API_BASE_URL}"
           
-          ESCAPED_URL=$(echo "$API_BASE_URL" | sed 's/[\/&]/\\&/g')
-          echo "Escaped URL: $ESCAPED_URL"
+          API_BASE_CLEAN="${API_BASE_URL%/}"
+          echo "API_BASE (no trailing slash): $API_BASE_CLEAN"
           
-          for file in $(find . -name "*.js" -type f); do
-            sed -i "s|__API_BASE__|$ESCAPED_URL|g" "$file"
-          done
+          echo "Replacing __API_BASE__ in JS files..."
+          find . -name "*.js" -type f -exec sed -i "s|__API_BASE__|${API_BASE_CLEAN}|g" {} \;
           
-          echo "Verifying injection:"
-          grep "API_BASE" static/gallery.js || echo "Not found in gallery.js"
+          echo "Verifying injection in admin/app.js:"
+          grep "API_BASE" admin/app.js | head -3
+          
+          echo "Verifying injection in static/gallery.js:"
+          grep "API_BASE" static/gallery.js | head -3
           
           wrangler pages project create bing --production-branch=main 2>/dev/null || true
           wrangler pages deploy . --project-name=bing --commit-dirty=true
