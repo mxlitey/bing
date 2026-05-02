@@ -36,15 +36,16 @@ async function loadMonth() {
 
 function renderGrid(data) {
   const grid = $('monthGrid');
-  grid.innerHTML = data.map(item => `
-    <a href="/${item.date}" class="thumb-item" data-date="${item.date}">
-      <img src="${item.url}?w=400" alt="${item.copyright}" loading="lazy">
+  grid.innerHTML = data.map(item => {
+    const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
+    return `<a href="/${item.date}" class="thumb-item" data-date="${item.date}">
+      <img src="${thumbUrl}" alt="${item.copyright}" loading="lazy">
       <div class="thumb-overlay">
         <div class="thumb-date-full">${item.date}</div>
         <div class="thumb-copyright">${item.copyright}</div>
       </div>
-    </a>
-  `).join('');
+    </a>`;
+  }).join('');
 }
 
 document.addEventListener('DOMContentLoaded', loadMonth);

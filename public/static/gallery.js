@@ -85,8 +85,9 @@ function renderChronicle() {
         <div class="thumb-grid">`;
       
       items.forEach(item => {
+        const thumbUrl = item.url.replace('_UHD.jpg', '_800x480.jpg');
         html += `<a href="/${item.date}" class="thumb-item" data-date="${item.date}" data-month="${monthKey}">
-          <img src="${item.url}" alt="${item.copyright}" loading="lazy">
+          <img src="${thumbUrl}" alt="${item.copyright}" loading="lazy">
           <div class="thumb-date">${item.date.substring(6, 8)}</div>
         </a>`;
       });
