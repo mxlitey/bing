@@ -191,8 +191,18 @@ export default {
     }
 
     if (path === '/api/login' && request.method === 'POST') {
-      const { token } = await request.json();
-      return token === env.AUTH_TOKEN ? json({ success: true, token }) : json({ success: false, error: '认证失败' }, 401);
+      try {
+        const body = await request.json();
+        const token = body.token;
+        console.log('Login attempt, token received:', token ? 'yes' : 'no');
+        console.log('AUTH_TOKEN set:', env.AUTH_TOKEN ? 'yes' : 'no');
+        if (token === env.AUTH_TOKEN) {
+          return json({ success: true, token });
+        }
+        return json({ success: false, error: '认证失败', debug: { hasToken: !!token, hasEnvToken: !!env.AUTH_TOKEN } }, 401);
+      } catch (e) {
+        return json({ success: false, error: '请求格式错误: ' + e.message }, 400);
+      }
     }
 
     if (path === '/api/stats') {
