@@ -14,15 +14,46 @@ function toast(msg, type = 'info') {
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
+function initTheme() {
+  const saved = localStorage.getItem('theme') || 'sakura';
+  document.documentElement.setAttribute('data-theme', saved);
+  updateThemeButtons(saved);
+}
+
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  localStorage.setItem('theme', theme);
+  updateThemeButtons(theme);
+}
+
+function updateThemeButtons(activeTheme) {
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.theme === activeTheme);
+  });
+}
+
 function switchView(showId, hideId) {
   const showEl = $(showId);
-  const hideEl = $(hideId);
+  const hideEl = $(hideEl);
   
   hideEl.classList.add('hidden');
   showEl.classList.remove('hidden');
   showEl.style.animation = 'none';
   showEl.offsetHeight;
   showEl.style.animation = null;
+}
+
+function showMainView() {
+  $('loginView').classList.add('hidden');
+  $('mainView').classList.remove('hidden');
+  $('headerActions').style.display = 'flex';
+  refreshStats();
+}
+
+function hideMainView() {
+  $('loginView').classList.remove('hidden');
+  $('mainView').classList.add('hidden');
+  $('headerActions').style.display = 'none';
 }
 
 async function login() {
@@ -42,8 +73,7 @@ async function login() {
   
   if (r.success) {
     localStorage.setItem('token', token);
-    switchView('mainView', 'loginView');
-    refreshStats();
+    showMainView();
     toast('登录成功', 'success');
   } else {
     toast('Token 错误', 'error');
@@ -54,16 +84,14 @@ async function login() {
 
 function logout() {
   localStorage.removeItem('token');
-  switchView('loginView', 'mainView');
+  hideMainView();
   $('tokenInput').value = '';
 }
 
 function checkLogin() {
   const token = localStorage.getItem('token');
   if (token) {
-    $('loginView').classList.add('hidden');
-    $('mainView').classList.remove('hidden');
-    refreshStats();
+    showMainView();
   }
 }
 
@@ -175,6 +203,12 @@ function readFile(file) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  initTheme();
+  
+  document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', () => setTheme(btn.dataset.theme));
+  });
+  
   const drop = $('dropZone');
   const input = $('fileInput');
   
