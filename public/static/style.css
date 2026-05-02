@@ -206,10 +206,7 @@ body {
 .year-title {
   font-size: 32px;
   font-weight: 700;
-  background: linear-gradient(135deg, var(--text-primary) 0%, var(--accent) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #ffffff;
 }
 
 .year-count {
@@ -270,7 +267,7 @@ body {
   bottom: 8px;
   right: 8px;
   padding: 4px 10px;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   border-radius: 6px;
   font-size: 12px;
