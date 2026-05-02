@@ -6,8 +6,7 @@ if (API_BASE === '__API_BASE__') {
 }
 
 let allData = [], years = [], groupedData = {};
-let isScrolling = false;
-let scrollTimer = null;
+let scrollTimeout = null;
 
 async function loadData() {
   try {
@@ -73,18 +72,21 @@ function renderChronicle() {
 }
 
 function renderTimeline() {
-  $('timelineSidebar').innerHTML = years.filter(y => groupedData[y]).map(year => {
+  const html = years.filter(y => groupedData[y]).map(year => {
     const months = Object.keys(groupedData[year]).sort().reverse();
     return `<div class="timeline-group" data-year="${year}">
       <div class="timeline-item" onclick="toggleYear('${year}')">
         <span class="timeline-dot"></span><span>${year}</span>
         <svg class="timeline-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
       </div>
-      <div class="timeline-sub">${months.map(m => 
-        `<a href="#m${m}" class="timeline-sub-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+m.slice(4,6)-1]}</span></a>`
-      ).join('')}</div>
+      <div class="timeline-sub">${months.map(m => {
+        const monthNum = m.slice(4, 6);
+        return `<a href="/${year}/${monthNum}" class="timeline-sub-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
+      }).join('')}</div>
     </div>`;
   }).join('');
+  
+  $('timelineSidebar').innerHTML = `<div class="timeline-scroll">${html}</div>`;
 }
 
 function toggleYear(year) {
@@ -95,26 +97,27 @@ function toggleYear(year) {
 }
 
 function initObservers() {
-  const imgOpts = { rootMargin: '50px 0px', threshold: 0.01 };
+  const imgOpts = { rootMargin: '100px 0px', threshold: 0.01 };
   const scrollOpts = { threshold: 0, rootMargin: '-50% 0px -50% 0px' };
   
+  function loadImage(img) {
+    if (!img.dataset.src || img.src) return;
+    img.onload = () => {
+      img.removeAttribute('data-src');
+      img.classList.add('loaded');
+    };
+    img.onerror = () => {
+      img.src = img.dataset.fallback;
+      img.classList.add('loaded');
+    };
+    img.src = img.dataset.src;
+  }
+  
   const imgObserver = new IntersectionObserver(entries => {
-    if (isScrolling) return;
     entries.forEach(e => {
       if (e.isIntersecting) {
-        const img = e.target;
-        if (img.dataset.src && !img.src) {
-          img.onload = () => {
-            img.removeAttribute('data-src');
-            img.classList.add('loaded');
-          };
-          img.onerror = () => {
-            img.src = img.dataset.fallback;
-            img.classList.add('loaded');
-          };
-          img.src = img.dataset.src;
-          imgObserver.unobserve(img);
-        }
+        loadImage(e.target);
+        imgObserver.unobserve(e.target);
       }
     });
   }, imgOpts);
@@ -147,26 +150,15 @@ function initObservers() {
   document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
   
   window.addEventListener('scroll', () => {
-    isScrolling = true;
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      isScrolling = false;
-      imgObserver.takeRecords().forEach(e => {
-        if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
-          const img = e.target;
-          img.onload = () => {
-            img.removeAttribute('data-src');
-            img.classList.add('loaded');
-          };
-          img.onerror = () => {
-            img.src = img.dataset.fallback;
-            img.classList.add('loaded');
-          };
-          img.src = img.dataset.src;
-          imgObserver.unobserve(img);
+    clearTimeout(scrollTimeout);
+    scrollTimeout = setTimeout(() => {
+      document.querySelectorAll('.lazy-img[data-src]').forEach(img => {
+        const rect = img.getBoundingClientRect();
+        if (rect.top < window.innerHeight + 100 && rect.bottom > -100) {
+          loadImage(img);
         }
       });
-    }, 150);
+    }, 200);
     
     const show = window.scrollY > heroHeight * 0.5;
     $('timelineSidebar').classList.toggle('visible', show);

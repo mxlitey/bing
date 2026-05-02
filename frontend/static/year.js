@@ -2,9 +2,6 @@ const $ = id => document.getElementById(id);
 const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 const API_BASE = '__API_BASE__'.replace(/\/$/, '');
 
-let isScrolling = false;
-let scrollTimer = null;
-
 async function loadYear() {
   const year = location.pathname.split('/')[1];
   
@@ -50,32 +47,40 @@ function renderYear(data, year) {
 }
 
 function renderTimeline(data) {
+  const year = location.pathname.split('/')[1];
   const months = [...new Set(data.map(i => i.date.slice(0, 6)))].sort().reverse();
-  $('timelineSidebar').innerHTML = months.map(m => 
-    `<a href="#m${m}" class="timeline-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+m.slice(4,6)-1]}</span></a>`
-  ).join('');
+  const html = months.map(m => {
+    const monthNum = m.slice(4, 6);
+    return `<a href="/${year}/${monthNum}" class="timeline-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
+  }).join('');
+  $('timelineSidebar').innerHTML = `<div class="timeline-scroll">${html}</div>`;
   $('timelineSidebar').classList.add('visible');
 }
 
 function initObservers() {
+  const imgOpts = { rootMargin: '100px 0px', threshold: 0.01 };
+  
+  function loadImage(img) {
+    if (!img.dataset.src || img.src) return;
+    img.onload = () => {
+      img.removeAttribute('data-src');
+      img.classList.add('loaded');
+    };
+    img.onerror = () => {
+      img.src = img.dataset.fallback;
+      img.classList.add('loaded');
+    };
+    img.src = img.dataset.src;
+  }
+  
   const imgObserver = new IntersectionObserver(entries => {
-    if (isScrolling) return;
     entries.forEach(e => {
-      if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
-        const img = e.target;
-        img.onload = () => {
-          img.removeAttribute('data-src');
-          img.classList.add('loaded');
-        };
-        img.onerror = () => {
-          img.src = img.dataset.fallback;
-          img.classList.add('loaded');
-        };
-        img.src = img.dataset.src;
-        imgObserver.unobserve(img);
+      if (e.isIntersecting) {
+        loadImage(e.target);
+        imgObserver.unobserve(e.target);
       }
     });
-  }, { rootMargin: '50px 0px', threshold: 0.01 });
+  }, imgOpts);
   
   document.querySelectorAll('.lazy-img').forEach(img => imgObserver.observe(img));
   
@@ -91,29 +96,6 @@ function initObservers() {
   }, { threshold: 0.3, rootMargin: '-20% 0px -60% 0px' });
   
   document.querySelectorAll('.month-section').forEach(s => scrollObserver.observe(s));
-  
-  window.addEventListener('scroll', () => {
-    isScrolling = true;
-    clearTimeout(scrollTimer);
-    scrollTimer = setTimeout(() => {
-      isScrolling = false;
-      imgObserver.takeRecords().forEach(e => {
-        if (e.isIntersecting && e.target.dataset.src && !e.target.src) {
-          const img = e.target;
-          img.onload = () => {
-            img.removeAttribute('data-src');
-            img.classList.add('loaded');
-          };
-          img.onerror = () => {
-            img.src = img.dataset.fallback;
-            img.classList.add('loaded');
-          };
-          img.src = img.dataset.src;
-          imgObserver.unobserve(img);
-        }
-      });
-    }, 150);
-  }, { passive: true });
 }
 
 document.addEventListener('DOMContentLoaded', loadYear);
