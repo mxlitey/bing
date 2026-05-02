@@ -96,7 +96,7 @@ async function refreshStats() {
 
 async function triggerUpdate() {
   toast('正在更新...', 'info');
-  const r = await api('/api/update');
+  const r = await api('/update');
   r.success ? toast(`${r.message} (${r.date})`, 'success') : toast(`失败: ${r.error}`, 'error');
   refreshStats();
 }
