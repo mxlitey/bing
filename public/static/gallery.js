@@ -12,12 +12,27 @@ async function loadData() {
     ]);
     allData = await dataRes.json();
     years = await yearsRes.json();
+    
+    if (allData.length) {
+      renderHero(allData[0]);
+    }
+    
     renderChronicle();
     renderTimeline();
     initScrollObserver();
   } catch (err) {
     $('loading').textContent = '加载失败: ' + err.message;
   }
+}
+
+function renderHero(latest) {
+  const hero = $('hero');
+  const heroDate = $('heroDate');
+  const heroTitle = $('heroTitle');
+  
+  hero.style.backgroundImage = `url('${latest.url}')`;
+  heroDate.textContent = latest.date;
+  heroTitle.textContent = latest.copyright;
 }
 
 function renderChronicle() {
@@ -113,32 +128,16 @@ function initScrollObserver() {
   
   sections.forEach(section => observer.observe(section));
   
-  let lastScrollTop = 0;
   window.addEventListener('scroll', () => {
     const scrollTop = window.scrollY;
-    const heroHeight = document.querySelector('.hero')?.offsetHeight || 0;
+    const heroHeight = $('hero')?.offsetHeight || 0;
     
     if (scrollTop > heroHeight * 0.5) {
       sidebar.classList.add('visible');
     } else {
       sidebar.classList.remove('visible');
     }
-    
-    lastScrollTop = scrollTop;
   }, { passive: true });
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  const scrollHint = document.querySelector('.scroll-hint');
-  if (scrollHint) {
-    window.addEventListener('scroll', () => {
-      if (window.scrollY > 100) {
-        scrollHint.style.opacity = '0';
-      } else {
-        scrollHint.style.opacity = '1';
-      }
-    }, { passive: true });
-  }
-  
-  loadData();
-});
+document.addEventListener('DOMContentLoaded', loadData);

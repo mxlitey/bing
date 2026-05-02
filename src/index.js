@@ -6,10 +6,6 @@ const json = (data, status = 200) => new Response(JSON.stringify(data, null, 2),
   headers: { 'content-type': 'application/json; charset=UTF-8', 'Access-Control-Allow-Origin': '*' }
 });
 
-const html = (content) => new Response(content, {
-  headers: { 'content-type': 'text/html; charset=UTF-8' }
-});
-
 const redirect = (url) => new Response(null, { status: 302, headers: { 'Location': url } });
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
@@ -162,132 +158,6 @@ function needAuth() {
   });
 }
 
-function renderIndex(latest, years) {
-  const latestHtml = latest ? `
-    <section class="hero" style="background-image: url('${latest.url}')">
-      <div class="hero-overlay"></div>
-      <div class="hero-content">
-        <div class="hero-date">${latest.date}</div>
-        <h1 class="hero-title">${latest.copyright}</h1>
-      </div>
-    </section>
-  ` : '<section class="hero"><div class="hero-content"><h1>暂无壁纸</h1></div></section>';
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bing Wallpaper</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-  ${latestHtml}
-  
-  <aside class="timeline-sidebar" id="timelineSidebar"></aside>
-  
-  <main class="chronicle" id="chronicle">
-    <div class="loading" id="loading">加载中...</div>
-  </main>
-
-  <script src="/static/gallery.js"></script>
-</body>
-</html>`;
-}
-
-function renderYear(year, data) {
-  const months = {};
-  data.forEach(item => {
-    const m = item.date.substring(0, 6);
-    if (!months[m]) months[m] = [];
-    months[m].push(item);
-  });
-
-  const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-  
-  const sections = Object.keys(months).sort().reverse().map(monthKey => {
-    const monthNum = parseInt(monthKey.substring(4, 6));
-    const items = months[monthKey];
-    const images = items.map(item => `
-      <a href="/${item.date}" class="thumb-item" data-date="${item.date}">
-        <img src="${item.url}?w=400" alt="${item.copyright}" loading="lazy">
-        <div class="thumb-date">${item.date.substring(6, 8)}</div>
-      </a>
-    `).join('');
-    
-    return `
-      <section class="month-section" id="m${monthKey}">
-        <h2 class="month-title">${monthNames[monthNum - 1]}</h2>
-        <div class="thumb-grid">${images}</div>
-      </section>
-    `;
-  }).join('');
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${year} - Bing Wallpaper</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body class="year-page">
-  <header class="page-header">
-    <a href="/" class="back-link">← 返回首页</a>
-    <h1>${year} 年</h1>
-  </header>
-  
-  <aside class="timeline-sidebar" id="timelineSidebar"></aside>
-  
-  <main class="chronicle year-view">
-    ${sections}
-  </main>
-
-  <script src="/static/gallery.js"></script>
-</body>
-</html>`;
-}
-
-function renderMonth(month, data) {
-  const year = month.substring(0, 4);
-  const monthNum = parseInt(month.substring(4, 6));
-  const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-
-  const images = data.map(item => `
-    <a href="/${item.date}" class="thumb-item" data-date="${item.date}">
-      <img src="${item.url}?w=400" alt="${item.copyright}" loading="lazy">
-      <div class="thumb-overlay">
-        <div class="thumb-date-full">${item.date}</div>
-        <div class="thumb-copyright">${item.copyright}</div>
-      </div>
-    </a>
-  `).join('');
-
-  return `<!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${year}年${monthNames[monthNum - 1]} - Bing Wallpaper</title>
-  <link rel="stylesheet" href="/static/style.css">
-</head>
-<body class="month-page">
-  <header class="page-header">
-    <a href="/" class="back-link">← 返回首页</a>
-    <a href="/${year}" class="year-link">${year}年</a>
-    <h1>${monthNames[monthNum - 1]}</h1>
-    <div class="photo-count">${data.length} 张</div>
-  </header>
-  
-  <main class="month-grid">
-    ${images}
-  </main>
-
-  <script src="/static/gallery.js"></script>
-</body>
-</html>`;
-}
-
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -305,7 +175,7 @@ export default {
       return json(await getYears(env));
     }
 
-    if (path === '/api/year/:year') {
+    if (path.startsWith('/api/year/')) {
       const match = path.match(/^\/api\/year\/(\d{4})$/);
       if (match) {
         const data = await getYearData(env, match[1]);
@@ -313,16 +183,12 @@ export default {
       }
     }
 
-    if (path === '/style.css' || path === '/app.js') {
-      return env.ASSETS.fetch(request);
-    }
-
-    if (path.startsWith('/static/')) {
-      return env.ASSETS.fetch(request);
-    }
-
-    if (path === '/admin' || path === '/admin/') {
-      return env.ASSETS.fetch(new Request(url.origin + '/index.html', request));
+    if (path.startsWith('/api/month/')) {
+      const match = path.match(/^\/api\/month\/(\d{6})$/);
+      if (match) {
+        const data = await getMonthData(env, PREFIX + match[1]);
+        return json(data);
+      }
     }
 
     if (path === '/api/login' && request.method === 'POST') {
@@ -353,12 +219,6 @@ export default {
       return json(result);
     }
 
-    if (/^\/api\/month\/\d{6}$/.test(path)) {
-      const month = path.slice(11);
-      const data = await getMonthData(env, PREFIX + month);
-      return json(data);
-    }
-
     if (path === '/api/export') {
       const data = await handleExport(url.searchParams, env);
       const result = filterFields(data, fields);
@@ -370,8 +230,6 @@ export default {
       return json(result);
     }
 
-    if (path.startsWith('/api/')) return json({ error: '未找到' }, 404);
-
     if (/^\/\d{8}$/.test(path)) {
       const dateNum = path.slice(1);
       const monthKey = PREFIX + dateNum.substring(0, 6);
@@ -380,34 +238,25 @@ export default {
       if (item) {
         return redirect(item.url);
       }
-      return html('<h1>未找到该日期的壁纸</h1><a href="/">返回首页</a>');
+      return new Response('<h1>未找到该日期的壁纸</h1><a href="/">返回首页</a>', {
+        status: 404,
+        headers: { 'content-type': 'text/html; charset=UTF-8' }
+      });
     }
 
     if (/^\/\d{6}$/.test(path)) {
       const month = path.slice(1);
-      const data = await getMonthData(env, PREFIX + month);
-      if (data.length) {
-        return html(renderMonth(month, data));
-      }
-      return html('<h1>未找到该月份的壁纸</h1><a href="/">返回首页</a>');
+      return redirect(`/month/?m=${month}`);
     }
 
     if (/^\/\d{4}$/.test(path)) {
       const year = path.slice(1);
-      const data = await getYearData(env, year);
-      if (data.length) {
-        return html(renderYear(year, data));
-      }
-      return html('<h1>未找到该年份的壁纸</h1><a href="/">返回首页</a>');
+      return redirect(`/year/?y=${year}`);
     }
 
-    if (path === '/') {
-      const latest = await getLatest(env);
-      const years = await getYears(env);
-      return html(renderIndex(latest, years));
+    if (path.startsWith('/api/import') || path === '/update' || path === '/api/delete-month') {
+      if (!checkAuth(request, env)) return needAuth();
     }
-
-    if (!checkAuth(request, env)) return needAuth();
 
     if (path === '/update') return json(await updateBing(env));
 
