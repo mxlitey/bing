@@ -51,14 +51,14 @@ function renderChronicle() {
     
     return `<section class="year-section" id="y${year}">
       <div class="year-header">
-        <a href="/${year}" class="year-title-link"><h2 class="year-title">${year}</h2></a>
+        <h2 class="year-title">${year}</h2>
         <span class="year-count">${count} 张</span>
       </div>
       ${months.map(m => {
         const items = groupedData[year][m];
         const monthNum = m.slice(4, 6);
         return `<section class="month-section" id="m${m}">
-          <a href="/${year}/${monthNum}" class="month-title-link"><h3 class="month-title">${MONTHS[+monthNum-1]}</h3></a>
+          <h3 class="month-title">${MONTHS[+monthNum-1]}</h3>
           <div class="thumb-grid">${items.map(item => 
             `<div class="thumb-item" onclick="window.open('${item.url}','_blank')">
               <img data-src="${item.url.replace('_UHD.jpg','_800x480.jpg')}" data-fallback="${item.url}" class="lazy-img">
@@ -75,13 +75,13 @@ function renderTimeline() {
   const html = years.filter(y => groupedData[y]).map(year => {
     const months = Object.keys(groupedData[year]).sort().reverse();
     return `<div class="timeline-group" data-year="${year}">
-      <div class="timeline-item" onclick="toggleYear('${year}')">
+      <a href="#y${year}" class="timeline-item" onclick="toggleYear('${year}'); return false;">
         <span class="timeline-dot"></span><span>${year}</span>
         <svg class="timeline-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-      </div>
+      </a>
       <div class="timeline-sub">${months.map(m => {
         const monthNum = m.slice(4, 6);
-        return `<a href="/${year}/${monthNum}" class="timeline-sub-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
+        return `<a href="#m${m}" class="timeline-sub-item" data-month="${m}"><span class="timeline-dot"></span><span>${MONTHS[+monthNum-1]}</span></a>`;
       }).join('')}</div>
     </div>`;
   }).join('');
@@ -98,7 +98,8 @@ function toggleYear(year) {
 
 function initObservers() {
   const imgOpts = { rootMargin: '100px 0px', threshold: 0.01 };
-  const scrollOpts = { threshold: 0, rootMargin: '-50% 0px -50% 0px' };
+  const headerOffset = 80;
+  const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
   
   function loadImage(img) {
     if (!img.dataset.src || img.src) return;

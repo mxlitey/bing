@@ -1,7 +1,9 @@
 const BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
 const PREFIX = 'bing_';
+const CACHE_KEY = 'cache_all_data';
+const CACHE_TTL = 300;
 
-const json = (data, status = 200) => new Response(JSON.stringify(data, null, 2), {
+const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
   headers: { 
     'content-type': 'application/json; charset=UTF-8', 
@@ -33,19 +35,45 @@ function filterFields(data, fields) {
   return filtered;
 }
 
+async function clearCache(env) {
+  await env.BING_KV.delete(CACHE_KEY);
+}
+
 async function saveMonthData(env, key, data) {
   await env.BING_KV.put(key, JSON.stringify(data));
+  await clearCache(env);
   return true;
 }
 
-async function getAllData(env) {
-  const keys = await getAllKeys(env);
-  const all = [];
-  for (const k of keys) {
-    const d = await env.BING_KV.get(k, 'json');
-    if (d) all.push(...d);
+async function getAllData(env, useCache = true) {
+  if (useCache) {
+    const cached = await env.BING_KV.get(CACHE_KEY, 'json');
+    if (cached && cached.data && cached.years) {
+      return cached;
+    }
   }
-  return all.sort((a, b) => b.date.localeCompare(a.date));
+  
+  const keys = await getAllKeys(env);
+  const promises = keys.map(k => env.BING_KV.get(k, 'json'));
+  const results = await Promise.all(promises);
+  
+  const all = [];
+  const years = new Set();
+  
+  for (const d of results) {
+    if (d) {
+      all.push(...d);
+      if (d[0]) years.add(d[0].date.substring(0, 4));
+    }
+  }
+  
+  all.sort((a, b) => b.date.localeCompare(a.date));
+  const yearsArr = Array.from(years).sort().reverse();
+  
+  const cacheData = { data: all, years: yearsArr };
+  await env.BING_KV.put(CACHE_KEY, JSON.stringify(cacheData), { expirationTtl: CACHE_TTL });
+  
+  return cacheData;
 }
 
 async function getYearData(env, year) {
@@ -170,15 +198,20 @@ export default {
     const path = url.pathname;
     const fields = url.searchParams.get('fields');
 
-    if (path === '/json') return json(filterFields(await getAllData(env), fields));
+    if (path === '/json') {
+      const cached = await getAllData(env);
+      return json(filterFields(cached.data, fields));
+    }
     
     if (path === '/api/latest') {
-      const all = await getAllData(env);
-      const latest = all[0];
-      return latest ? json(latest) : json({ error: '暂无数据' }, 404);
+      const cached = await getAllData(env);
+      return cached.data[0] ? json(cached.data[0]) : json({ error: '暂无数据' }, 404);
     }
 
-    if (path === '/api/years') return json(await getYears(env));
+    if (path === '/api/years') {
+      const cached = await getAllData(env);
+      return json(cached.years);
+    }
 
     if (path.startsWith('/api/year/')) {
       const match = path.match(/^\/api\/year\/(\d{4})$/);
@@ -247,6 +280,7 @@ export default {
       const { month } = await request.json();
       if (!month) return json({ success: false, error: '缺少月份' }, 400);
       await env.BING_KV.delete(PREFIX + month.replace('-', ''));
+      await clearCache(env);
       return json({ success: true, message: `已删除 ${month}` });
     }
 
