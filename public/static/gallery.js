@@ -31,7 +31,9 @@ function renderHero(latest) {
   const heroTitle = $('heroTitle');
   
   hero.style.backgroundImage = `url('${latest.url}')`;
-  heroDate.textContent = latest.date;
+  const dateStr = latest.date;
+  const formattedDate = `${dateStr.substring(0, 4)}-${dateStr.substring(4, 6)}-${dateStr.substring(6, 8)}`;
+  heroDate.textContent = formattedDate;
   heroTitle.textContent = latest.copyright;
 }
 
