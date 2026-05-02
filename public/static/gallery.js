@@ -4,6 +4,8 @@ const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','
 let allData = [], years = [], groupedData = {};
 let isScrollingToTarget = false;
 let currentYear = '', currentMonth = '';
+let viewportObserver, preloadObserver;
+let scrollEndTimer = null;
 
 async function loadData() {
   try {
@@ -74,7 +76,7 @@ function renderTimeline() {
     return `<div class="timeline-group" data-year="${year}">
       <a href="#y${year}" class="timeline-item" onclick="toggleYear('${year}'); return false;">
         <span class="timeline-dot"></span><span>${year}</span>
-        <svg class="timeline-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        <svg class="timeline-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6" /></svg>
       </a>
       <div class="timeline-sub">${months.map(m => {
         const monthNum = m.slice(4, 6);
@@ -86,41 +88,170 @@ function renderTimeline() {
   $('timelineSidebar').innerHTML = `<div class="timeline-scroll">${html}</div>`;
 }
 
+// ✅ 新增：点击年份直接跳转（保留原展开/折叠逻辑）
 function toggleYear(year) {
-  document.querySelectorAll('.timeline-group').forEach(g => {
-    g.classList.toggle('expanded', g.dataset.year === year && !g.classList.contains('expanded'));
-    if (g.dataset.year !== year) g.classList.remove('expanded');
-  });
-}
+  const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
+  if (!group) return;
 
-function scrollToMonth(month, year) {
-  const el = $('m' + month);
-  if (el) {
-    const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
-    if (group) {
-      document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
-      group.classList.add('expanded');
-    }
-    isScrollingToTarget = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setTimeout(() => { 
-      isScrollingToTarget = false;
-      updateUI(year, month);
-    }, 800);
+  // 原逻辑：展开/折叠年份
+  const isExpanded = group.classList.contains('expanded');
+  document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
+  
+  if (!isExpanded) {
+    group.classList.add('expanded');
+    // ✅ 新增：展开后平滑跳转到对应年份
+    scrollToElement(`y${year}`, year, '');
   }
 }
 
+// ✅ 通用跳转函数（月份/年份共用所有加载优化）
+function scrollToElement(elementId, year, month) {
+  const el = $(elementId);
+  if (!el) return;
+
+  // 步骤1：立即取消所有非视口的正在进行的请求
+  cancelNonViewportRequests();
+  
+  // 步骤2：标记为程序滚动，全程禁用懒加载直到滚动结束
+  isScrollingToTarget = true;
+  
+  // 步骤3：平滑滚动到目标元素
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  
+  // 步骤4：滚动完全结束后恢复懒加载并按优先级加载
+  const handleScrollEnd = () => {
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    
+    isScrollingToTarget = false;
+    loadByViewportPriority();
+    updateUI(year, month);
+    
+    window.removeEventListener('scrollend', handleScrollEnd);
+  };
+
+  window.addEventListener('scrollend', handleScrollEnd);
+  // 平滑滚动兜底：1.5秒后强制恢复
+  scrollEndTimer = setTimeout(handleScrollEnd, 1500);
+}
+
+// ✅ 月份跳转函数（复用通用逻辑）
+function scrollToMonth(month, year) {
+  const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
+  if (group) {
+    document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
+    group.classList.add('expanded');
+  }
+  
+  scrollToElement(`m${month}`, year, month);
+}
+
+// 带AbortController的图片加载函数（保留原错误处理）
 function loadImage(img) {
   if (!img.dataset.src || img.src) return;
+  
+  // 取消该图片之前未完成的请求
+  if (img.abortController) {
+    img.abortController.abort();
+    delete img.abortController;
+  }
+
+  const controller = new AbortController();
+  img.abortController = controller;
+  const src = img.dataset.src;
+  const fallback = img.dataset.fallback;
+
   img.onload = () => {
     img.removeAttribute('data-src');
     img.classList.add('loaded');
+    delete img.abortController;
   };
+  
   img.onerror = () => {
-    img.src = img.dataset.fallback;
+    img.src = fallback;
     img.classList.add('loaded');
+    delete img.abortController;
   };
-  img.src = img.dataset.src;
+
+  // 使用fetch加载图片，支持中断
+  fetch(src, { 
+    signal: controller.signal,
+    priority: img.fetchPriority || 'auto'
+  })
+    .then(res => {
+      if (!res.ok) throw new Error('Image load failed');
+      return res.blob();
+    })
+    .then(blob => {
+      img.src = URL.createObjectURL(blob);
+    })
+    .catch(err => {
+      if (err.name !== 'AbortError') {
+        // 降级处理：直接赋值src
+        img.src = src;
+      }
+    });
+}
+
+// 按视口优先级加载图片
+function loadByViewportPriority() {
+  const viewportTop = window.scrollY;
+  const viewportBottom = viewportTop + window.innerHeight;
+  const PRELOAD_MARGIN = window.innerHeight; // 预加载上下各1屏
+
+  // 分类所有待加载图片
+  const viewportImages = [];
+  const preloadImages = [];
+  const allLazyImages = document.querySelectorAll('img.lazy-img:not(.loaded)');
+
+  allLazyImages.forEach(img => {
+    const rect = img.getBoundingClientRect();
+    const imgTop = rect.top + viewportTop;
+    const imgBottom = rect.bottom + viewportTop;
+
+    if (imgBottom >= viewportTop && imgTop <= viewportBottom) {
+      viewportImages.push(img);
+    } else if (imgBottom >= viewportTop - PRELOAD_MARGIN && imgTop <= viewportBottom + PRELOAD_MARGIN) {
+      preloadImages.push(img);
+    }
+  });
+
+  // 最高优先级：当前视口图片
+  viewportImages.forEach(img => {
+    img.fetchPriority = 'high';
+    loadImage(img);
+    viewportObserver.unobserve(img);
+    preloadObserver.unobserve(img);
+  });
+
+  // 次优先级：预加载区域图片（延迟200ms）
+  setTimeout(() => {
+    preloadImages.forEach(img => {
+      img.fetchPriority = 'low';
+      loadImage(img);
+      viewportObserver.unobserve(img);
+      preloadObserver.unobserve(img);
+    });
+  }, 200);
+}
+
+// 取消所有非视口的正在进行的请求
+function cancelNonViewportRequests() {
+  const viewportTop = window.scrollY;
+  const viewportBottom = viewportTop + window.innerHeight;
+  
+  document.querySelectorAll('img.lazy-img:not(.loaded)').forEach(img => {
+    if (!img.abortController) return;
+    
+    const rect = img.getBoundingClientRect();
+    const imgTop = rect.top + viewportTop;
+    const imgBottom = rect.bottom + viewportTop;
+    
+    // 取消不在当前视口内的请求
+    if (imgBottom < viewportTop || imgTop > viewportBottom) {
+      img.abortController.abort();
+      delete img.abortController;
+    }
+  });
 }
 
 function updateUI(year, month) {
@@ -144,28 +275,35 @@ function updateUI(year, month) {
   }
 }
 
+// 修复后的Observer初始化
 function initObservers() {
   const headerOffset = 80;
   const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
   
-  const viewportObserver = new IntersectionObserver(entries => {
+  // 视口内图片加载Observer（添加程序滚动判断）
+  viewportObserver = new IntersectionObserver(entries => {
     entries.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
     entries.forEach(e => {
-      if (e.isIntersecting) {
+      // 只有非程序滚动且元素真正可见时才加载
+      if (!isScrollingToTarget && e.isIntersecting) {
         loadImage(e.target);
         viewportObserver.unobserve(e.target);
+        preloadObserver.unobserve(e.target);
       }
     });
   }, { rootMargin: '0px', threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
   
-  const preloadObserver = new IntersectionObserver(entries => {
+  // 预加载Observer（添加程序滚动判断，减小预加载边距）
+  preloadObserver = new IntersectionObserver(entries => {
     entries.forEach(e => {
-      if (e.isIntersecting && !e.target.src) {
+      // 只有非程序滚动且元素真正可见时才加载
+      if (!isScrollingToTarget && e.isIntersecting && !e.target.src) {
         loadImage(e.target);
+        viewportObserver.unobserve(e.target);
         preloadObserver.unobserve(e.target);
       }
     });
-  }, { rootMargin: '200px 0px', threshold: 0.01 });
+  }, { rootMargin: '50px 0px', threshold: 0.01 }); // 从200px减小到50px
   
   document.querySelectorAll('.lazy-img').forEach(img => {
     viewportObserver.observe(img);
