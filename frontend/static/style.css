@@ -319,8 +319,20 @@ body {
   .hero { padding: 16px; }
   .hero-date { font-size: 12px; }
   .hero-title { font-size: 13px; }
-  .timeline-sidebar { display: none; }
-  .chronicle { padding-right: 24px; }
+  .timeline-sidebar {
+    right: 50%;
+    transform: translateX(50%);
+    bottom: 20px;
+    top: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    max-width: 90vw;
+    gap: 4px;
+    padding: 8px 12px;
+  }
+  .timeline-sidebar .timeline-sub { display: none !important; }
+  .timeline-arrow { display: none; }
+  .chronicle { padding-right: 24px; padding-bottom: 100px; }
   .thumb-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .month-page .month-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 16px; }
   .page-header { flex-wrap: wrap; gap: 10px; }
