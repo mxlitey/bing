@@ -15,11 +15,13 @@ jobs:
 
       - name: Check API_BASE_URL
         run: |
-          if [ -z "${{ secrets.API_BASE_URL }}" ]; then
-            echo "ERROR: API_BASE_URL secret is not set"
+          API_URL="${{ vars.API_BASE_URL }}"
+          if [ -z "$API_URL" ]; then
+            echo "ERROR: API_BASE_URL variable is not set"
             exit 1
           fi
-          echo "API_BASE_URL is configured"
+          echo "API_BASE_URL=$API_URL" >> $GITHUB_ENV
+          echo "API_BASE_URL is configured: $API_URL"
 
       - run: npm install -g wrangler
 
@@ -41,12 +43,10 @@ jobs:
       - name: Inject API_BASE and Deploy Frontend
         working-directory: frontend
         run: |
-          API_URL="${{ secrets.API_BASE_URL }}"
-          
-          sed -i "s|__API_BASE__|$API_URL|g" static/*.js
-          sed -i "s|__API_BASE__|$API_URL|g" admin/app.js
+          sed -i "s|__API_BASE__|$API_BASE_URL|g" static/*.js
+          sed -i "s|__API_BASE__|$API_BASE_URL|g" admin/app.js
           
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
           sed -i "s/AUTH_TOKEN = \"your-secure-token-here\"/AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"/g" wrangler.toml
           
-          wrangler pages deploy . --project-name=bing-wallpaper
+          wrangler pages deploy . --project-name=bing
