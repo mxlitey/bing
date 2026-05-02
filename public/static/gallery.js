@@ -163,12 +163,6 @@ function initObservers() {
   document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
   document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
   
-  function updateVisibility() {
-    const show = currentYear && window.scrollY > heroHeight * 0.5;
-    $('timelineSidebar').classList.toggle('visible', show);
-    $('floatingInfo')?.classList.toggle('visible', show);
-  }
-  
   window.addEventListener('scroll', () => {
     clearTimeout(scrollTimeout);
     scrollTimeout = setTimeout(() => {
@@ -180,27 +174,20 @@ function initObservers() {
       });
     }, 200);
     
-    updateVisibility();
+    const show = currentYear && window.scrollY > heroHeight * 0.5;
+    $('timelineSidebar').classList.toggle('visible', show);
   }, { passive: true });
-  
-  updateVisibility();
 }
 
 function updateUI(year, month) {
   document.querySelectorAll('.timeline-group').forEach(g => {
     const active = g.dataset.year === year;
     g.classList.toggle('active', active);
-    g.classList.toggle('expanded', active && month);
+    g.classList.toggle('expanded', active);
     g.querySelectorAll('.timeline-sub-item').forEach(item => {
       item.classList.toggle('active', item.dataset.month === month);
     });
   });
-  
-  const info = $('floatingInfo');
-  if (info) {
-    info.querySelector('.floating-year').textContent = year + ' 年';
-    info.querySelector('.floating-month').textContent = month ? MONTHS[+month.slice(4,6)-1] : '';
-  }
 }
 
 document.addEventListener('DOMContentLoaded', loadData);

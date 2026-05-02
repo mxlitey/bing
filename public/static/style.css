@@ -22,30 +22,6 @@ body {
   line-height: 1.6;
 }
 
-.floating-info {
-  position: fixed;
-  top: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 24px;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 30px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-.floating-info.visible { opacity: 1; }
-.floating-year { font-size: 20px; font-weight: 600; color: #fff; }
-.floating-divider { color: rgba(255,255,255,0.4); font-size: 20px; }
-.floating-month { font-size: 18px; color: rgba(255,255,255,0.9); }
-
 .hero {
   position: relative;
   height: 100vh;
@@ -148,6 +124,14 @@ body {
   font-size: 12px;
 }
 .timeline-sub-item:hover { background: rgba(255, 255, 255, 0.05); color: var(--text); }
+.timeline-sub-item.active { 
+  background: rgba(96, 165, 250, 0.2); 
+  color: var(--accent); 
+}
+.timeline-sub-item.active .timeline-dot {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(96, 165, 250, 0.4);
+}
 
 .timeline-dot {
   width: 8px;
@@ -375,6 +359,11 @@ body {
     padding: 6px 8px;
     font-size: 12px;
     white-space: nowrap;
+  }
+  .timeline-sidebar .timeline-sub-item.active {
+    background: rgba(96, 165, 250, 0.3);
+    color: var(--accent);
+    border-radius: 12px;
   }
   .timeline-sidebar .timeline-dot { display: none; }
   .chronicle { padding-right: 16px; padding-left: 16px; padding-bottom: 80px; }
