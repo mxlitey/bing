@@ -254,6 +254,8 @@ function updateTimeline(year, month) {
       group.querySelectorAll('.timeline-sub-item').forEach(item => {
         item.classList.toggle('active', item.dataset.month === month);
       });
+    } else {
+      group.classList.remove('expanded');
     }
   });
 }
