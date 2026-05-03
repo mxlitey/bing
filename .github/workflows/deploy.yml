@@ -38,7 +38,9 @@ jobs:
 
       - name: Set secrets
         run: |
-          echo "${{ secrets.AUTH_TOKEN }}" | wrangler secret put AUTH_TOKEN
+          echo "{\"AUTH_TOKEN\":\"${{ secrets.AUTH_TOKEN }}\"}" > /tmp/secrets.json
+          wrangler secret bulk /tmp/secrets.json
+          rm -f /tmp/secrets.json
 
       - name: Deploy
         run: wrangler deploy
