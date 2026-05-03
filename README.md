@@ -26,11 +26,11 @@
 
 在 Fork 的仓库中，进入 `Settings > Secrets and variables > Actions`，添加：
 
-| Name | Value |
-|------|-------|
-| `CLOUDFLARE_API_TOKEN` | 上一步创建的 API Token |
+| Name                    | Value            |
+| ----------------------- | ---------------- |
+| `CLOUDFLARE_API_TOKEN`  | 上一步创建的 API Token |
 | `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID |
-| `AUTH_TOKEN` | 管理面板认证密码 |
+| `AUTH_TOKEN`            | 管理面板认证密码         |
 
 **4. 推送代码**
 
@@ -45,18 +45,18 @@
 
 ## API
 
-| 端点 | 方法 | 认证 | 说明 |
-|------|------|------|------|
-| `/json` | GET | ❌ | 获取所有数据 |
-| `/api/years` | GET | ❌ | 年份列表 |
-| `/api/latest` | GET | ❌ | 最新壁纸 |
-| `/api/month/YYYYMM` | GET | ❌ | 指定月份数据 |
-| `/api/stats` | GET | ❌ | 统计信息 |
-| `/api/export` | GET | ❌ | 导出数据 |
-| `/api/login` | POST | ❌ | 登录认证 |
-| `/update` | GET | ✅ | 手动更新 |
-| `/api/import` | POST | ✅ | 导入数据 |
-| `/api/delete-month` | POST | ✅ | 删除月份 |
+| 端点                  | 方法   | 认证 | 说明     |
+| ------------------- | ---- | -- | ------ |
+| `/json`             | GET  | ❌  | 获取所有数据 |
+| `/api/years`        | GET  | ❌  | 年份列表   |
+| `/api/latest`       | GET  | ❌  | 最新壁纸   |
+| `/api/month/YYYYMM` | GET  | ❌  | 指定月份数据 |
+| `/api/stats`        | GET  | ❌  | 统计信息   |
+| `/api/export`       | GET  | ❌  | 导出数据   |
+| `/api/login`        | POST | ❌  | 登录认证   |
+| `/update`           | GET  | ✅  | 手动更新   |
+| `/api/import`       | POST | ✅  | 导入数据   |
+| `/api/delete-month` | POST | ✅  | 删除月份   |
 
 ### 字段过滤
 
@@ -92,7 +92,7 @@
 
 ```toml
 [triggers]
-crons = ["0 0 * * *"]  # 每天 UTC 0点自动更新
+crons = ["5 16 * * *"]  # 每天 UTC 16：05（北京时间00：05）自动更新
 ```
 
 ## License

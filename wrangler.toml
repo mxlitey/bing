@@ -14,4 +14,4 @@ binding = "BING_KV"
 id = "your-kv-namespace-id"
 
 [triggers]
-crons = ["0 0 * * *"]
+crons = ["5 16 * * *"]
