@@ -36,11 +36,12 @@ jobs:
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
 
+      - name: Deploy
+        run: wrangler deploy
+
       - name: Set secrets
+        if: always()
         run: |
           echo "{\"AUTH_TOKEN\":\"${{ secrets.AUTH_TOKEN }}\"}" > /tmp/secrets.json
           wrangler secret bulk /tmp/secrets.json
           rm -f /tmp/secrets.json
-
-      - name: Deploy
-        run: wrangler deploy
