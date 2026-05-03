@@ -1,12 +1,31 @@
 const $ = (id) => document.getElementById(id);
 
+const escapeHtml = (str) => {
+  if (str == null) return '';
+  const div = document.createElement('div');
+  div.textContent = String(str);
+  return div.innerHTML;
+};
+
 const api = async (path, opts = {}) => {
   const token = localStorage.getItem('token');
   opts.headers = opts.headers || {};
   if (token && !opts.skipAuth) {
     opts.headers['Authorization'] = `Bearer ${token}`;
   }
-  return (await fetch(path, opts)).json();
+  try {
+    const response = await fetch(path, opts);
+    if (!response.ok) {
+      if (response.status === 401) {
+        logout();
+        return { error: '需要认证' };
+      }
+      return { error: `请求失败: ${response.status}` };
+    }
+    return await response.json();
+  } catch (e) {
+    return { error: '网络错误: ' + e.message };
+  }
 };
 
 function toast(msg, type = 'info') {
@@ -85,44 +104,73 @@ function logout() {
   $('tokenInput').value = '';
 }
 
-function checkLogin() {
+async function checkLogin() {
   const token = localStorage.getItem('token');
-  if (token) {
-    showMainView();
+  if (!token) return;
+  
+  try {
+    const response = await fetch('/api/stats', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
+    
+    if (response.ok) {
+      showMainView();
+    } else if (response.status === 401) {
+      localStorage.removeItem('token');
+    }
+  } catch (e) {
+    localStorage.removeItem('token');
   }
 }
 
 async function refreshStats() {
   const s = await api('/api/stats');
-  if (!s) return;
+  if (!s || s.error) {
+    if (s?.error === '需要认证') return;
+    return;
+  }
   
   $('statsArea').innerHTML = `
     <div class="stat-card">
-      <div class="stat-value">${s.months}</div>
+      <div class="stat-value">${escapeHtml(s.months)}</div>
       <div class="stat-label">月份数</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${s.total}</div>
+      <div class="stat-value">${escapeHtml(s.total)}</div>
       <div class="stat-label">总记录数</div>
     </div>
   `;
 
   const months = await api('/api/months');
-  if (!months) return;
+  if (!months || months.error) return;
   
-  $('monthTable').innerHTML = months.map(m => `
-    <tr>
-      <td><span class="month-link" onclick="viewMonth('${m.month}')">${m.month}</span></td>
-      <td>${m.count}</td>
-      <td><span class="delete-btn" onclick="deleteMonth('${m.month}')">删除</span></td>
-    </tr>
-  `).join('');
+  const tbody = $('monthTable');
+  tbody.innerHTML = '';
+  months.forEach(m => {
+    const tr = document.createElement('tr');
+    const monthEscaped = escapeHtml(m.month);
+    const countEscaped = escapeHtml(m.count);
+    tr.innerHTML = `
+      <td><span class="month-link" data-month="${monthEscaped}">${monthEscaped}</span></td>
+      <td>${countEscaped}</td>
+      <td><span class="delete-btn" data-month="${monthEscaped}">删除</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+  
+  tbody.querySelectorAll('.month-link').forEach(el => {
+    el.addEventListener('click', () => viewMonth(el.dataset.month));
+  });
+  tbody.querySelectorAll('.delete-btn').forEach(el => {
+    el.addEventListener('click', () => deleteMonth(el.dataset.month));
+  });
 }
 
 async function triggerUpdate() {
   toast('正在更新...', 'info');
   const r = await api('/update');
-  r.success ? toast(`${r.message} (${r.date})`, 'success') : toast(`失败: ${r.error}`, 'error');
+  if (r?.error === '需要认证') return;
+  r?.success ? toast(`${r.message} (${r.date})`, 'success') : toast(`失败: ${r?.error}`, 'error');
   refreshStats();
 }
 
@@ -147,29 +195,29 @@ async function importData(data) {
     fill.style.width = '0%';
   }, 800);
 
-  if (r.success) {
-    $('importResult').innerHTML = `<span class="success">新增 ${r.imported} 条, 跳过 ${r.skipped} 条</span>`;
+  if (r?.success) {
+    $('importResult').innerHTML = `<span class="success">新增 ${escapeHtml(r.imported)} 条, 跳过 ${escapeHtml(r.skipped)} 条</span>`;
     toast('导入成功', 'success');
     refreshStats();
-  } else if (r.error === '需要认证') {
+  } else if (r?.error === '需要认证') {
     logout();
   } else {
-    $('importResult').innerHTML = `<span class="error">${r.error}</span>`;
+    $('importResult').innerHTML = `<span class="error">${escapeHtml(r?.error)}</span>`;
   }
 }
 
 function exportData(download = false) {
-  const start = $('exportStart').value;
-  const end = $('exportEnd').value;
+  const start = $('exportStart').value.trim();
+  const end = $('exportEnd').value.trim();
   let url = '/api/export?';
-  if (start) url += `start=${start}&`;
-  if (end) url += `end=${end}&`;
+  if (start) url += `start=${encodeURIComponent(start)}&`;
+  if (end) url += `end=${encodeURIComponent(end)}&`;
   if (download) url += 'download=1';
   window.open(url, '_blank');
 }
 
 function viewMonth(m) { 
-  window.open('/' + m, '_blank'); 
+  window.open('/' + encodeURIComponent(m), '_blank'); 
 }
 
 async function deleteMonth(m) {
@@ -179,11 +227,13 @@ async function deleteMonth(m) {
     headers: { 'Content-Type': 'application/json' }, 
     body: JSON.stringify({ month: m }) 
   });
-  if (r.success) { 
+  if (r?.success) { 
     toast(`已删除 ${m}`, 'success'); 
     refreshStats(); 
-  } else if (r.error === '需要认证') {
+  } else if (r?.error === '需要认证') {
     logout();
+  } else if (r?.error) {
+    toast(r.error, 'error');
   }
 }
 

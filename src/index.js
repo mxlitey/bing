@@ -98,29 +98,35 @@ async function getYears(env) {
 }
 
 async function updateBing(env) {
-  const res = await fetch(BING_API);
-  const data = await res.json();
-  if (!data.images?.length) return { success: false, error: '获取失败' };
+  try {
+    const res = await fetch(BING_API);
+    if (!res.ok) return { success: false, error: 'Bing API 请求失败' };
+    
+    const data = await res.json();
+    if (!data.images?.length) return { success: false, error: '获取失败' };
 
-  const img = data.images[0];
-  const entry = {
-    date: img.enddate,
-    copyright: img.copyright || '',
-    url: `https://cn.bing.com${img.urlbase}_UHD.jpg`
-  };
+    const img = data.images[0];
+    const entry = {
+      date: img.enddate,
+      copyright: img.copyright || '',
+      url: `https://cn.bing.com${img.urlbase}_UHD.jpg`
+    };
 
-  const key = getMonthKey(entry.date);
-  const monthData = await getMonthData(env, key);
+    const key = getMonthKey(entry.date);
+    const monthData = await getMonthData(env, key);
 
-  if (monthData.some(i => i.date === entry.date)) {
-    return { success: true, message: '已存在', date: entry.date };
+    if (monthData.some(i => i.date === entry.date)) {
+      return { success: true, message: '已存在', date: entry.date };
+    }
+
+    monthData.push(entry);
+    monthData.sort((a, b) => a.date.localeCompare(b.date));
+    await saveMonthData(env, key, monthData);
+
+    return { success: true, message: '更新成功', data: entry, total: monthData.length };
+  } catch (e) {
+    return { success: false, error: '更新失败: ' + e.message };
   }
-
-  monthData.push(entry);
-  monthData.sort((a, b) => a.date.localeCompare(b.date));
-  await saveMonthData(env, key, monthData);
-
-  return { success: true, message: '更新成功', data: entry, total: monthData.length };
 }
 
 async function handleImport(body, env) {
@@ -154,8 +160,25 @@ async function handleImport(body, env) {
 async function handleExport(params, env) {
   const keys = await getAllKeys(env);
   let filtered = keys;
-  if (params.get('start')) filtered = filtered.filter(k => k.replace(PREFIX, '') >= params.get('start').replace('-', ''));
-  if (params.get('end')) filtered = filtered.filter(k => k.replace(PREFIX, '') <= params.get('end').replace('-', ''));
+  
+  const start = params.get('start');
+  const end = params.get('end');
+  
+  if (start) {
+    const normalizedStart = start.replace(/-/g, '');
+    if (!/^\d{6}$/.test(normalizedStart)) {
+      return { error: '起始月份格式错误，应为 YYYYMM 格式' };
+    }
+    filtered = filtered.filter(k => k.replace(PREFIX, '') >= normalizedStart);
+  }
+  
+  if (end) {
+    const normalizedEnd = end.replace(/-/g, '');
+    if (!/^\d{6}$/.test(normalizedEnd)) {
+      return { error: '结束月份格式错误，应为 YYYYMM 格式' };
+    }
+    filtered = filtered.filter(k => k.replace(PREFIX, '') <= normalizedEnd);
+  }
 
   const all = [];
   for (const k of filtered) {
@@ -166,10 +189,20 @@ async function handleExport(params, env) {
   return all;
 }
 
+function safeCompare(a, b) {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
+
 function checkAuth(request, env) {
   const auth = request.headers.get('Authorization');
   if (!auth || !auth.startsWith('Bearer ')) return false;
-  return auth.slice(7) === env.AUTH_TOKEN;
+  return safeCompare(auth.slice(7), env.AUTH_TOKEN);
 }
 
 function needAuth() {
@@ -227,7 +260,7 @@ export default {
     if (path === '/api/login' && request.method === 'POST') {
       try {
         const { token } = await request.json();
-        return token === env.AUTH_TOKEN ? json({ success: true, token }) : json({ success: false, error: '认证失败' }, 401);
+        return safeCompare(token, env.AUTH_TOKEN) ? json({ success: true }) : json({ success: false, error: '认证失败' }, 401);
       } catch (e) {
         return json({ success: false, error: '请求格式错误' }, 400);
       }
@@ -255,6 +288,7 @@ export default {
 
     if (path === '/api/export') {
       const data = await handleExport(url.searchParams, env);
+      if (data.error) return json(data, 400);
       const result = filterFields(data, fields);
       if (url.searchParams.get('download') === '1') {
         return new Response(JSON.stringify(result, null, 2), {
@@ -278,11 +312,19 @@ export default {
     }
 
     if (path === '/api/delete-month' && request.method === 'POST') {
-      const { month } = await request.json();
-      if (!month) return json({ success: false, error: '缺少月份' }, 400);
-      await env.BING_KV.delete(PREFIX + month.replace('-', ''));
-      await buildCache(env);
-      return json({ success: true, message: `已删除 ${month}` });
+      try {
+        const { month } = await request.json();
+        if (!month) return json({ success: false, error: '缺少月份' }, 400);
+        const normalizedMonth = String(month).replace(/-/g, '');
+        if (!/^\d{6}$/.test(normalizedMonth)) {
+          return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
+        }
+        await env.BING_KV.delete(PREFIX + normalizedMonth);
+        await buildCache(env);
+        return json({ success: true, message: `已删除 ${normalizedMonth}` });
+      } catch (e) {
+        return json({ success: false, error: '请求格式错误' }, 400);
+      }
     }
 
     return env.ASSETS.fetch(request);
