@@ -227,10 +227,7 @@ export default {
     if (path === '/api/login' && request.method === 'POST') {
       try {
         const { token } = await request.json();
-        console.log('DEBUG: received token:', token);
-        console.log('DEBUG: env.AUTH_TOKEN:', env.AUTH_TOKEN);
-        console.log('DEBUG: match:', token === env.AUTH_TOKEN);
-        return token === env.AUTH_TOKEN ? json({ success: true, token }) : json({ success: false, error: '认证失败', debug: { hasToken: !!token, hasEnvToken: !!env.AUTH_TOKEN } }, 401);
+        return token === env.AUTH_TOKEN ? json({ success: true, token }) : json({ success: false, error: '认证失败' }, 401);
       } catch (e) {
         return json({ success: false, error: '请求格式错误' }, 400);
       }

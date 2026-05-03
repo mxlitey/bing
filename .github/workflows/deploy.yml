@@ -26,6 +26,5 @@ jobs:
       - name: Deploy
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
-          sed -i '/^AUTH_TOKEN/d' wrangler.toml
-          echo "AUTH_TOKEN = \"${{ secrets.AUTH_TOKEN }}\"" >> wrangler.toml
+          sed -i 's/AUTH_TOKEN = "your-secure-token-here"/AUTH_TOKEN = "${{ secrets.AUTH_TOKEN }}"/g' wrangler.toml
           wrangler deploy
