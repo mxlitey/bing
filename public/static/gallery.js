@@ -1,9 +1,9 @@
 (function() {
   'use strict';
-  
+
   const $ = id => document.getElementById(id);
   const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
-  
+
   let allData = [];
   let years = [];
   let groupedData = {};
@@ -22,7 +22,7 @@
       const cached = await response.json();
       allData = cached.data || cached;
       years = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
-      
+
       if (allData.length) renderHero(allData[0]);
       groupData();
       renderChronicle();
@@ -38,8 +38,7 @@
     allData.forEach(item => {
       const y = item.date.slice(0, 4);
       const m = item.date.slice(0, 6);
-      if (!groupedData[y]) groupedData[y] = {};
-      if (!groupedData[y][m]) groupedData[y][m] = [];
+      (groupedData[y] ??= {})[m] ??= [];
       groupedData[y][m].push(item);
     });
   }
@@ -52,68 +51,68 @@
   }
 
   function renderHero(latest) {
-    $('hero').style.backgroundImage = `url('${escapeHtml(latest.url)}')`;
+    $('hero').style.backgroundImage = `url("${latest.url.replace(/"/g, '\\"')}")`;
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
     $('heroTitle').textContent = latest.copyright;
   }
 
   function renderChronicle() {
-    if (!allData.length) return $('loading').textContent = '暂无壁纸数据';
+    if (!allData.length) { $('loading').textContent = '暂无壁纸数据'; return; }
     $('loading').remove();
-    
+
     const chronicle = $('chronicle');
     chronicle.innerHTML = '';
-    
+
     years.filter(y => groupedData[y]).forEach(year => {
       const months = Object.keys(groupedData[year]).sort().reverse();
       const count = months.reduce((sum, m) => sum + groupedData[year][m].length, 0);
-      
+
       const section = document.createElement('section');
       section.className = 'year-section';
       section.id = `y${year}`;
       section.innerHTML = `
         <div class="year-header">
           <h2 class="year-title">${escapeHtml(year)}</h2>
-          <span class="year-count">${escapeHtml(count)} 张</span>
+          <span class="year-count">${escapeHtml(String(count))} 张</span>
         </div>
       `;
-      
+
       months.forEach(m => {
         const items = groupedData[year][m];
         const monthNum = m.slice(4, 6);
-        
+
         const monthSection = document.createElement('section');
         monthSection.className = 'month-section';
         monthSection.id = `m${m}`;
         monthSection.innerHTML = `<h3 class="month-title">${MONTHS[+monthNum-1]}</h3>`;
-        
+
         const grid = document.createElement('div');
         grid.className = 'thumb-grid';
-        
+
         items.forEach(item => {
           const thumbItem = document.createElement('div');
           thumbItem.className = 'thumb-item';
-          thumbItem.onclick = () => window.open(item.url, '_blank');
-          
+          thumbItem.onclick = () => window.open(item.url, '_blank', 'noopener');
+
           const img = document.createElement('img');
           img.className = 'lazy-img';
           img.dataset.src = item.url.replace('_UHD.jpg','_800x480.jpg');
           img.dataset.fallback = item.url;
-          img.alt = '';
-          
+          img.alt = item.copyright || '';
+
           const dateDiv = document.createElement('div');
           dateDiv.className = 'thumb-date';
           dateDiv.textContent = item.date.slice(6, 8);
-          
+
           thumbItem.appendChild(img);
           thumbItem.appendChild(dateDiv);
           grid.appendChild(thumbItem);
         });
-        
+
         monthSection.appendChild(grid);
         section.appendChild(monthSection);
       });
-      
+
       chronicle.appendChild(section);
     });
   }
@@ -132,22 +131,19 @@
         }).join('')}</div>
       </div>`;
     }).join('');
-    
+
     $('timelineSidebar').innerHTML = `<div class="timeline-scroll">${html}</div>`;
-    
-    document.querySelectorAll('.timeline-item').forEach(el => {
-      el.addEventListener('click', (e) => {
+
+    $('timelineSidebar').addEventListener('click', (e) => {
+      const item = e.target.closest('.timeline-item');
+      const subItem = e.target.closest('.timeline-sub-item');
+      if (subItem) {
         e.preventDefault();
-        const year = el.closest('.timeline-group').dataset.year;
-        toggleYear(year);
-      });
-    });
-    
-    document.querySelectorAll('.timeline-sub-item').forEach(el => {
-      el.addEventListener('click', (e) => {
+        scrollToMonth(subItem.dataset.month, subItem.dataset.year);
+      } else if (item) {
         e.preventDefault();
-        scrollToMonth(el.dataset.month, el.dataset.year);
-      });
+        toggleYear(item.closest('.timeline-group').dataset.year);
+      }
     });
   }
 
@@ -157,7 +153,7 @@
 
     const isExpanded = group.classList.contains('expanded');
     document.querySelectorAll('.timeline-group').forEach(g => g.classList.remove('expanded'));
-    
+
     if (!isExpanded) {
       group.classList.add('expanded');
       scrollToElement(`y${year}`, year, '');
@@ -171,7 +167,7 @@
     cancelNonViewportRequests();
     isScrollingToTarget = true;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    
+
     const handleScrollEnd = () => {
       if (scrollEndTimer) clearTimeout(scrollEndTimer);
       isScrollingToTarget = false;
@@ -202,7 +198,7 @@
 
   function loadImage(img) {
     if (!img.dataset.src || img.src) return;
-    
+
     if (img.abortController) {
       img.abortController.abort();
       delete img.abortController;
@@ -218,22 +214,17 @@
       img.classList.add('loaded');
       delete img.abortController;
     };
-    
+
     img.onerror = () => {
-      if (img.src && img.src.startsWith('blob:')) {
-        revokeBlobUrl(img.src);
-      }
+      if (img.src?.startsWith('blob:')) revokeBlobUrl(img.src);
       img.src = fallback;
       img.classList.add('loaded');
       delete img.abortController;
     };
 
-    fetch(src, { 
-      signal: controller.signal,
-      priority: img.fetchPriority || 'auto'
-    })
+    fetch(src, { signal: controller.signal, priority: img.fetchPriority || 'auto' })
       .then(res => {
-        if (!res.ok) throw new Error('Image load failed');
+        if (!res.ok) throw new Error();
         return res.blob();
       })
       .then(blob => {
@@ -242,9 +233,7 @@
         img.src = blobUrl;
       })
       .catch(err => {
-        if (err.name !== 'AbortError') {
-          img.src = src;
-        }
+        if (err.name !== 'AbortError') img.src = src;
       });
   }
 
@@ -272,16 +261,16 @@
     viewportImages.forEach(img => {
       img.fetchPriority = 'high';
       loadImage(img);
-      if (viewportObserver) viewportObserver.unobserve(img);
-      if (preloadObserver) preloadObserver.unobserve(img);
+      viewportObserver?.unobserve(img);
+      preloadObserver?.unobserve(img);
     });
 
     setTimeout(() => {
       preloadImages.forEach(img => {
         img.fetchPriority = 'low';
         loadImage(img);
-        if (viewportObserver) viewportObserver.unobserve(img);
-        if (preloadObserver) preloadObserver.unobserve(img);
+        viewportObserver?.unobserve(img);
+        preloadObserver?.unobserve(img);
       });
     }, 200);
   }
@@ -289,15 +278,16 @@
   function cancelNonViewportRequests() {
     const viewportTop = window.scrollY;
     const viewportBottom = viewportTop + window.innerHeight;
-    
+
     document.querySelectorAll('img.lazy-img:not(.loaded)').forEach(img => {
       if (!img.abortController) return;
-      
+
       const rect = img.getBoundingClientRect();
       const imgTop = rect.top + viewportTop;
       const imgBottom = rect.bottom + viewportTop;
-      
+
       if (imgBottom < viewportTop || imgTop > viewportBottom) {
+        if (img.src?.startsWith('blob:')) revokeBlobUrl(img.src);
         img.abortController.abort();
         delete img.abortController;
       }
@@ -308,86 +298,81 @@
     if (year === currentYear && month === currentMonth) return;
     currentYear = year;
     currentMonth = month;
-    
-    const groups = document.querySelectorAll('.timeline-group');
-    for (let i = 0; i < groups.length; i++) {
-      const g = groups[i];
+
+    document.querySelectorAll('.timeline-group').forEach(g => {
       const active = g.dataset.year === year;
+      g.classList.toggle('active', active);
+      g.classList.toggle('expanded', active);
       if (active) {
-        g.classList.add('active', 'expanded');
-        const items = g.querySelectorAll('.timeline-sub-item');
-        for (let j = 0; j < items.length; j++) {
-          items[j].classList.toggle('active', items[j].dataset.month === month);
-        }
-      } else {
-        g.classList.remove('active', 'expanded');
+        g.querySelectorAll('.timeline-sub-item').forEach(item => {
+          item.classList.toggle('active', item.dataset.month === month);
+        });
       }
-    }
+    });
   }
 
   function initObservers() {
     const headerOffset = 80;
     const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
-    
+
     viewportObserver = new IntersectionObserver(entries => {
-      entries.sort((a, b) => b.intersectionRatio - a.intersectionRatio);
       entries.forEach(e => {
         if (!isScrollingToTarget && e.isIntersecting) {
           loadImage(e.target);
           viewportObserver.unobserve(e.target);
-          preloadObserver.unobserve(e.target);
+          preloadObserver?.unobserve(e.target);
         }
       });
     }, { rootMargin: '0px', threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
-    
+
     preloadObserver = new IntersectionObserver(entries => {
       entries.forEach(e => {
         if (!isScrollingToTarget && e.isIntersecting && !e.target.src) {
           loadImage(e.target);
-          viewportObserver.unobserve(e.target);
+          viewportObserver?.unobserve(e.target);
           preloadObserver.unobserve(e.target);
         }
       });
     }, { rootMargin: '50px 0px', threshold: 0.01 });
-    
+
     document.querySelectorAll('.lazy-img').forEach(img => {
       viewportObserver.observe(img);
       preloadObserver.observe(img);
     });
-    
+
     const heroHeight = $('hero')?.offsetHeight || 0;
     let lastScrollY = 0;
     let sidebarVisible = false;
-    
+
     const yearObserver = new IntersectionObserver(entries => {
       if (isScrollingToTarget) return;
-      for (let i = 0; i < entries.length; i++) {
-        if (entries[i].isIntersecting) {
-          updateUI(entries[i].target.id.slice(1), currentMonth);
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          updateUI(entry.target.id.slice(1), currentMonth);
           break;
         }
       }
     }, scrollOpts);
-    
+
     const monthObserver = new IntersectionObserver(entries => {
       if (isScrollingToTarget) return;
-      for (let i = 0; i < entries.length; i++) {
-        if (entries[i].isIntersecting) {
-          const m = entries[i].target.id.slice(1);
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          const m = entry.target.id.slice(1);
           updateUI(m.slice(0, 4), m);
           break;
         }
       }
     }, scrollOpts);
-    
+
     document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
     document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
-    
+
     window.addEventListener('scroll', () => {
       const scrollY = window.scrollY;
       if (Math.abs(scrollY - lastScrollY) < 50) return;
       lastScrollY = scrollY;
-      
+
       const show = currentYear && scrollY > heroHeight * 0.5;
       if (show !== sidebarVisible) {
         sidebarVisible = show;
@@ -402,7 +387,7 @@
   }
 
   window.addEventListener('beforeunload', cleanup);
-  
+
   document.addEventListener('DOMContentLoaded', () => {
     window.scrollTo(0, 0);
     loadData();

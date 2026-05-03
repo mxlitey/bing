@@ -13,18 +13,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - run: npm install -g wrangler
 
       - name: Setup KV namespace
         id: kv
         run: |
-          KV_ID=$(wrangler kv namespace list 2>/dev/null | python3 -c "import sys,json; print(next((i['id'] for i in json.load(sys.stdin) if 'BING_KV' in i.get('title','')), ''))" || echo "")
-          [ -z "$KV_ID" ] && KV_ID=$(wrangler kv namespace create BING_KV --preview false 2>&1 | grep -oP 'id\s*=\s*"\K[^"]+' || echo "")
-          [ -z "$KV_ID" ] && { echo "ERROR: Failed to get KV ID"; exit 1; }
-          echo "KV_ID=$KV_ID" >> $GITHUB_ENV
+          KV_ID=$(wrangler kv namespace list 2>/dev/null | jq -r '.[] | select(.title | test("BING_KV")) | .id' | head -1 || echo "")
+          if [ -z "$KV_ID" ]; then
+            KV_ID=$(wrangler kv namespace create BING_KV --preview false 2>&1 | grep -oP 'id\s*=\s*"\K[^"]+' || echo "")
+          fi
+          if [ -z "$KV_ID" ]; then
+            echo "ERROR: Failed to get KV ID"
+            exit 1
+          fi
+          echo "KV_ID=$KV_ID" >> "$GITHUB_ENV"
 
-      - name: Deploy
+      - name: Configure wrangler
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
-          sed -i 's/AUTH_TOKEN = "your-secure-token-here"/AUTH_TOKEN = "${{ secrets.AUTH_TOKEN }}"/g' wrangler.toml
-          wrangler deploy
+
+      - name: Set secrets
+        run: |
+          echo "${{ secrets.AUTH_TOKEN }}" | wrangler secret put AUTH_TOKEN
+
+      - name: Deploy
+        run: wrangler deploy

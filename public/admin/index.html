@@ -3,8 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Bing Wallpaper 管理面板 - 导入导出和管理壁纸数据">
   <title>Bing Wallpaper 管理面板</title>
-  <link rel="stylesheet" href="/admin/style.css">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div class="bg-gradient"></div>
@@ -43,7 +44,7 @@
               <span class="theme-dot"></span>
             </button>
           </div>
-          <button class="btn btn-ghost" onclick="logout()">
+          <button class="btn btn-ghost" id="logoutBtn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9"/>
             </svg>
@@ -69,7 +70,7 @@
           <p class="login-hint">请输入管理 Token 以继续</p>
           <div class="input-group">
             <input type="password" id="tokenInput" placeholder="管理 Token" autocomplete="off">
-            <button class="btn btn-primary" onclick="login()">
+            <button class="btn btn-primary" id="loginBtn">
               <span>进入</span>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M5 12h14M12 5l7 7-7 7"/>
@@ -127,13 +128,13 @@
         <div class="card-body">
           <div class="export-form">
             <div class="input-row">
-              <input type="text" id="exportStart" placeholder="起始月份 202102">
+              <input type="text" id="exportStart" placeholder="起始月份 202102" pattern="\d{6}" maxlength="6">
               <span class="separator">—</span>
-              <input type="text" id="exportEnd" placeholder="结束月份 202605">
+              <input type="text" id="exportEnd" placeholder="结束月份 202605" pattern="\d{6}" maxlength="6">
             </div>
             <div class="btn-group">
-              <button class="btn btn-outline" onclick="exportData()">预览</button>
-              <button class="btn btn-primary" onclick="exportData(true)">下载</button>
+              <button class="btn btn-outline" id="exportPreviewBtn">预览</button>
+              <button class="btn btn-primary" id="exportDownloadBtn">下载</button>
             </div>
           </div>
         </div>
@@ -152,7 +153,7 @@
         </div>
         <div class="card-body">
           <div class="action-grid">
-            <button class="action-btn" onclick="triggerUpdate()">
+            <button class="action-btn" id="updateBtn">
               <div class="action-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M23 4v6h-6M1 20v-6h6"/>
@@ -161,7 +162,7 @@
               </div>
               <span>手动更新</span>
             </button>
-            <button class="action-btn" onclick="refreshStats()">
+            <button class="action-btn" id="refreshBtn">
               <div class="action-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M18 20V10M12 20V4M6 20v-6"/>
@@ -204,6 +205,6 @@
   </main>
 
   <div class="toast" id="toast"></div>
-  <script src="/admin/app.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
