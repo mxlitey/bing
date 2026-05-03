@@ -24,13 +24,19 @@
       allData = cached.data || cached;
       years = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
 
+      const skeleton = $('skeleton');
+      if (skeleton) skeleton.remove();
+
       if (allData.length) renderHero(allData[0]);
       groupData();
       renderChronicle();
       renderTimeline();
       initObservers();
     } catch (err) {
-      $('loading').textContent = '加载失败: ' + err.message;
+      const skeleton = $('skeleton');
+      if (skeleton) skeleton.remove();
+      const chronicle = $('chronicle');
+      chronicle.innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
     }
   }
 
@@ -53,6 +59,7 @@
 
   function renderHero(latest) {
     const hero = $('hero');
+    const loader = $('heroLoader');
     const thumbUrl = latest.url.replace('_UHD.jpg','_800x480.jpg');
     hero.style.backgroundImage = `url("${thumbUrl.replace(/"/g, '\\"')}")`;
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
@@ -65,13 +72,16 @@
         blobUrls.add(blobUrl);
         hero.style.setProperty('--hero-hd-url', `url("${blobUrl}")`);
         hero.classList.add('hero-hd');
+        loader.classList.add('hidden');
       })
-      .catch(() => {});
+      .catch(() => { loader.classList.add('hidden'); });
   }
 
   function renderChronicle() {
-    if (!allData.length) { $('loading').textContent = '暂无壁纸数据'; return; }
-    $('loading').remove();
+    if (!allData.length) {
+      $('chronicle').innerHTML = '<div class="loading-error">暂无壁纸数据</div>';
+      return;
+    }
 
     const chronicle = $('chronicle');
     chronicle.innerHTML = '';
@@ -408,8 +418,6 @@
 
   window.addEventListener('beforeunload', cleanup);
 
-  document.addEventListener('DOMContentLoaded', () => {
-    window.scrollTo(0, 0);
-    loadData();
-  });
+  window.scrollTo(0, 0);
+  loadData();
 })();

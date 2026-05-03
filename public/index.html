@@ -10,6 +10,9 @@
 </head>
 <body>
   <section class="hero" id="hero">
+    <div class="hero-loader" id="heroLoader">
+      <div class="hero-spinner"></div>
+    </div>
     <div class="hero-content">
       <div class="hero-date" id="heroDate"></div>
       <h1 class="hero-title" id="heroTitle"></h1>
@@ -19,9 +22,22 @@
   <aside class="timeline-sidebar" id="timelineSidebar"></aside>
 
   <main class="chronicle" id="chronicle">
-    <div class="loading" id="loading">加载中...</div>
+    <div class="skeleton" id="skeleton">
+      <div class="skeleton-year">
+        <div class="skeleton-bar skeleton-shimmer" style="width:80px;height:32px"></div>
+        <div class="skeleton-bar skeleton-shimmer" style="width:50px;height:24px;border-radius:20px"></div>
+      </div>
+      <div class="skeleton-grid">
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+        <div class="skeleton-thumb skeleton-shimmer"></div>
+      </div>
+    </div>
   </main>
 
-  <script src="/static/gallery.js"></script>
+  <script defer src="/static/gallery.js"></script>
 </body>
 </html>
