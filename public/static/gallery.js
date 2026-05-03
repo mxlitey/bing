@@ -13,6 +13,7 @@
   let viewportObserver = null;
   let preloadObserver = null;
   let scrollEndTimer = null;
+  let scrollPriorityTimer = null;
   const blobUrls = new Set();
 
   async function loadData() {
@@ -51,9 +52,21 @@
   }
 
   function renderHero(latest) {
-    $('hero').style.backgroundImage = `url("${latest.url.replace(/"/g, '\\"')}")`;
+    const hero = $('hero');
+    const thumbUrl = latest.url.replace('_UHD.jpg','_800x480.jpg');
+    hero.style.backgroundImage = `url("${thumbUrl.replace(/"/g, '\\"')}")`;
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
     $('heroTitle').textContent = latest.copyright;
+
+    fetch(latest.url, { priority: 'low' })
+      .then(res => { if (!res.ok) throw new Error(); return res.blob(); })
+      .then(blob => {
+        const blobUrl = URL.createObjectURL(blob);
+        blobUrls.add(blobUrl);
+        hero.style.setProperty('--hero-hd-url', `url("${blobUrl}")`);
+        hero.classList.add('hero-hd');
+      })
+      .catch(() => {});
   }
 
   function renderChronicle() {
@@ -288,6 +301,7 @@
 
       if (imgBottom < viewportTop || imgTop > viewportBottom) {
         if (img.src?.startsWith('blob:')) revokeBlobUrl(img.src);
+        img.removeAttribute('src');
         img.abortController.abort();
         delete img.abortController;
       }
@@ -378,6 +392,12 @@
         sidebarVisible = show;
         $('timelineSidebar').classList.toggle('visible', show);
       }
+
+      if (scrollPriorityTimer) clearTimeout(scrollPriorityTimer);
+      scrollPriorityTimer = setTimeout(() => {
+        cancelNonViewportRequests();
+        loadByViewportPriority();
+      }, 150);
     }, { passive: true });
   }
 

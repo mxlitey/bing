@@ -28,12 +28,25 @@ body {
   min-height: 600px;
   background-size: cover;
   background-position: center;
+  background-color: #0a0a0f;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
   padding: 24px;
 }
-.hero-content { text-align: right; }
+.hero::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  background-image: var(--hero-hd-url);
+  opacity: 0;
+  transition: opacity 0.8s ease-in-out;
+  pointer-events: none;
+}
+.hero.hero-hd::after { opacity: 1; }
+.hero-content { text-align: right; position: relative; z-index: 1; }
 .hero-date {
   display: inline-block;
   font-size: 15px;
