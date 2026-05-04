@@ -103,16 +103,6 @@ async function saveMonthData(env, key, data) {
   await clearCache(env);
 }
 
-async function getYearData(env, year) {
-  const cached = await getAllData(env);
-  return cached.data.filter(item => item.date.startsWith(year));
-}
-
-async function getYears(env) {
-  const cached = await getAllData(env);
-  return cached.years;
-}
-
 function validateEntry(item) {
   if (!item || typeof item !== 'object') return false;
   if (!item.date || !/^\d{8}$/.test(String(item.date))) return false;
@@ -184,38 +174,6 @@ async function handleImport(body, env) {
   return { success: true, imported, skipped, months: Object.keys(monthMap).length };
 }
 
-async function handleExport(params, env) {
-  const keys = await getAllKeys(env);
-  let filtered = keys;
-
-  const start = params.get('start');
-  const end = params.get('end');
-
-  if (start) {
-    const normalizedStart = start.replace(/-/g, '');
-    if (!/^\d{6}$/.test(normalizedStart)) {
-      return { error: '起始月份格式错误，应为 YYYYMM 格式' };
-    }
-    filtered = filtered.filter(k => k.replace(PREFIX, '') >= normalizedStart);
-  }
-
-  if (end) {
-    const normalizedEnd = end.replace(/-/g, '');
-    if (!/^\d{6}$/.test(normalizedEnd)) {
-      return { error: '结束月份格式错误，应为 YYYYMM 格式' };
-    }
-    filtered = filtered.filter(k => k.replace(PREFIX, '') <= normalizedEnd);
-  }
-
-  const all = [];
-  for (const k of filtered) {
-    const d = await env.BING_KV.get(k, 'json');
-    if (d) all.push(...d);
-  }
-  all.sort((a, b) => a.date.localeCompare(b.date));
-  return all;
-}
-
 async function safeCompare(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   const encoder = new TextEncoder();
@@ -255,37 +213,6 @@ const PUBLIC_ROUTES = {
   '/json': async ({ env, fields }) => {
     const cached = await getAllData(env);
     return json(filterFields(cached.data, fields));
-  },
-  '/api/latest': async ({ env }) => {
-    const cached = await getAllData(env);
-    return cached.data[0] ? json(cached.data[0]) : json({ error: '暂无数据' }, 404);
-  },
-  '/api/years': async ({ env }) => {
-    return json(await getYears(env));
-  },
-  '/api/stats': async ({ env }) => {
-    const cached = await getAllData(env);
-    return json({ months: cached.years.length, total: cached.data.length });
-  },
-  '/api/months': async ({ env }) => {
-    const keys = await getAllKeys(env);
-    const result = [];
-    for (const k of keys) {
-      const d = await env.BING_KV.get(k, 'json');
-      result.push({ month: k.replace(PREFIX, ''), count: d?.length || 0 });
-    }
-    return json(result);
-  },
-  '/api/export': async ({ env, url, fields }) => {
-    const data = await handleExport(url.searchParams, env);
-    if (data.error) return json(data, 400);
-    const result = filterFields(data, fields);
-    if (url.searchParams.get('download') === '1') {
-      return new Response(JSON.stringify(result, null, 2), {
-        headers: { 'content-type': 'application/json; charset=UTF-8', 'Content-Disposition': 'attachment; filename="bing_wallpapers.json"', ...CORS_HEADERS }
-      });
-    }
-    return json(result);
   }
 };
 
@@ -310,22 +237,57 @@ const PROTECTED_ROUTES = {
     }
     return json(await handleImport(body, env));
   },
-  '/api/delete-month': async ({ env, request }) => {
+  '/api/delete': async ({ env, request }) => {
     let body;
     try {
       body = await request.json();
     } catch {
       return json({ success: false, error: '请求格式错误' }, 400);
     }
-    const { month } = body;
-    if (!month) return json({ success: false, error: '缺少月份' }, 400);
-    const normalizedMonth = String(month).replace(/-/g, '');
-    if (!/^\d{6}$/.test(normalizedMonth)) {
-      return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
+    const { year, month, date } = body;
+
+    if (date) {
+      const normalizedDate = String(date).replace(/-/g, '');
+      if (!/^\d{8}$/.test(normalizedDate)) {
+        return json({ success: false, error: '日期格式错误，应为 YYYYMMDD 格式' }, 400);
+      }
+      const monthKey = PREFIX + normalizedDate.slice(0, 6);
+      const monthData = await env.BING_KV.get(monthKey, 'json') || [];
+      const newData = monthData.filter(item => item.date !== normalizedDate);
+      if (newData.length === 0) {
+        await env.BING_KV.delete(monthKey);
+      } else {
+        await env.BING_KV.put(monthKey, JSON.stringify(newData));
+      }
+      await buildCache(env);
+      return json({ success: true, message: `已删除 ${normalizedDate}` });
     }
-    await env.BING_KV.delete(PREFIX + normalizedMonth);
-    await buildCache(env);
-    return json({ success: true, message: `已删除 ${normalizedMonth}` });
+
+    if (month) {
+      const normalizedMonth = String(month).replace(/-/g, '');
+      if (!/^\d{6}$/.test(normalizedMonth)) {
+        return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
+      }
+      await env.BING_KV.delete(PREFIX + normalizedMonth);
+      await buildCache(env);
+      return json({ success: true, message: `已删除 ${normalizedMonth}` });
+    }
+
+    if (year) {
+      const normalizedYear = String(year);
+      if (!/^\d{4}$/.test(normalizedYear)) {
+        return json({ success: false, error: '年份格式错误，应为 YYYY 格式' }, 400);
+      }
+      const keys = await getAllKeys(env);
+      const yearKeys = keys.filter(k => k.replace(PREFIX, '').startsWith(normalizedYear));
+      for (const k of yearKeys) {
+        await env.BING_KV.delete(k);
+      }
+      await buildCache(env);
+      return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${yearKeys.length} 个月份数据` });
+    }
+
+    return json({ success: false, error: '请指定 year、month 或 date 参数' }, 400);
   }
 };
 
@@ -348,16 +310,6 @@ export default {
       } catch {
         return json({ success: false, error: '请求格式错误' }, 400);
       }
-    }
-
-    if (path.startsWith('/api/year/')) {
-      const match = path.match(/^\/api\/year\/(\d{4})$/);
-      if (match) return json(await getYearData(env, match[1]));
-    }
-
-    if (path.startsWith('/api/month/')) {
-      const match = path.match(/^\/api\/month\/(\d{6})$/);
-      if (match) return json(await getMonthData(env, PREFIX + match[1]));
     }
 
     if (PUBLIC_ROUTES[path]) {

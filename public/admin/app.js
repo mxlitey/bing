@@ -128,46 +128,179 @@ async function checkLogin() {
   }
 }
 
+let allData = [];
+let yearsList = [];
+
 async function refreshStats() {
-  const s = await api('/api/stats');
-  if (!s || s.error) {
-    if (s?.error === '需要认证') return;
+  const cached = await api('/json');
+  if (!cached || cached.error) {
+    if (cached?.error === '需要认证') return;
     return;
   }
 
+  allData = cached.data || cached;
+  yearsList = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
+
+  const monthMap = {};
+  allData.forEach(item => {
+    const month = item.date.slice(0, 6);
+    monthMap[month] = (monthMap[month] || 0) + 1;
+  });
+
+  const monthsArr = Object.entries(monthMap)
+    .map(([month, count]) => ({ month, count }))
+    .sort((a, b) => b.month.localeCompare(a.month));
+
+  const monthCount = monthsArr.length;
+  const total = allData.length;
+
   $('statsArea').innerHTML = `
     <div class="stat-card">
-      <div class="stat-value">${escapeHtml(String(s.months))}</div>
+      <div class="stat-value">${escapeHtml(String(monthCount))}</div>
       <div class="stat-label">月份数</div>
     </div>
     <div class="stat-card">
-      <div class="stat-value">${escapeHtml(String(s.total))}</div>
+      <div class="stat-value">${escapeHtml(String(total))}</div>
       <div class="stat-label">总记录数</div>
     </div>
   `;
 
-  const months = await api('/api/months');
-  if (!months || months.error) return;
+  const tree = {};
+  monthsArr.forEach(m => {
+    const year = m.month.slice(0, 4);
+    const month = m.month.slice(4, 6);
+    if (!tree[year]) tree[year] = { count: 0, months: [] };
+    tree[year].count += m.count;
+    tree[year].months.push({ month, count: m.count, full: m.month });
+  });
 
-  const tbody = $('monthTable');
-  tbody.innerHTML = '';
-  months.forEach(m => {
-    const tr = document.createElement('tr');
-    const monthEscaped = escapeHtml(m.month);
-    const countEscaped = escapeHtml(String(m.count));
-    tr.innerHTML = `
-      <td><span class="month-link" data-month="${monthEscaped}">${monthEscaped}</span></td>
-      <td>${countEscaped}</td>
-      <td><span class="delete-btn" data-month="${monthEscaped}">删除</span></td>
+  const container = $('monthTable');
+  container.innerHTML = '';
+
+  Object.keys(tree).sort((a, b) => b.localeCompare(a)).forEach(year => {
+    const yearData = tree[year];
+    const yearEl = document.createElement('div');
+    yearEl.className = 'tree-year';
+    yearEl.innerHTML = `
+      <div class="tree-header">
+        <div class="tree-toggle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+        </div>
+        <span class="tree-label">${escapeHtml(year)} 年</span>
+        <span class="tree-count">${escapeHtml(String(yearData.count))} 张</span>
+        <span class="tree-delete" data-year="${escapeHtml(year)}">删除</span>
+      </div>
+      <div class="tree-children"></div>
     `;
-    tbody.appendChild(tr);
+
+    const childrenEl = yearEl.querySelector('.tree-children');
+    yearData.months.sort((a, b) => b.month.localeCompare(a.month)).forEach(m => {
+      const monthEl = document.createElement('div');
+      monthEl.className = 'tree-month';
+      monthEl.innerHTML = `
+        <div class="tree-header">
+          <div class="tree-toggle">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+          </div>
+          <span class="tree-label">${escapeHtml(m.month)} 月</span>
+          <span class="tree-count">${escapeHtml(String(m.count))} 张</span>
+          <span class="tree-delete" data-month="${escapeHtml(m.full)}">删除</span>
+        </div>
+        <div class="tree-children"></div>
+      `;
+
+      childrenEl.appendChild(monthEl);
+    });
+
+    container.appendChild(yearEl);
   });
 
-  tbody.querySelectorAll('.month-link').forEach(el => {
-    el.addEventListener('click', () => viewMonth(el.dataset.month));
+  container.querySelectorAll('.tree-year > .tree-header').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.tree-delete')) return;
+      el.parentElement.classList.toggle('expanded');
+    });
   });
-  tbody.querySelectorAll('.delete-btn').forEach(el => {
-    el.addEventListener('click', () => deleteMonth(el.dataset.month));
+
+  container.querySelectorAll('.tree-month > .tree-header').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      if (e.target.closest('.tree-delete')) return;
+      const monthEl = el.parentElement;
+      if (monthEl.classList.contains('loaded')) {
+        monthEl.classList.toggle('expanded');
+        return;
+      }
+
+      const monthKey = el.querySelector('.tree-delete').dataset.month;
+      const data = allData.filter(item => item.date.startsWith(monthKey));
+      if (!data.length) return;
+
+      const childrenEl = monthEl.querySelector('.tree-children');
+      childrenEl.innerHTML = '';
+
+      data.forEach(item => {
+        const dayEl = document.createElement('div');
+        dayEl.className = 'tree-day';
+        dayEl.innerHTML = `
+          <span class="tree-label">${escapeHtml(item.date.slice(6, 8))} 日</span>
+          <span class="tree-desc">${escapeHtml(item.copyright || '')}</span>
+          <span class="tree-delete" data-date="${escapeHtml(item.date)}">删除</span>
+        `;
+        childrenEl.appendChild(dayEl);
+      });
+
+      monthEl.classList.add('loaded', 'expanded');
+    });
+  });
+
+  container.querySelectorAll('.tree-delete').forEach(el => {
+    el.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const year = el.dataset.year;
+      const month = el.dataset.month;
+      const date = el.dataset.date;
+
+      if (year) {
+        if (!confirm(`确定删除 ${year} 年的所有数据？`)) return;
+        const r = await api('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ year })
+        });
+        if (r?.success) {
+          toast(r.message, 'success');
+          refreshStats();
+        } else if (r?.error) {
+          toast(r.error, 'error');
+        }
+      } else if (month) {
+        if (!confirm(`确定删除 ${month} 的数据？`)) return;
+        const r = await api('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ month })
+        });
+        if (r?.success) {
+          toast(r.message, 'success');
+          refreshStats();
+        } else if (r?.error) {
+          toast(r.error, 'error');
+        }
+      } else if (date) {
+        if (!confirm(`确定删除 ${date} 的数据？`)) return;
+        const r = await api('/api/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date })
+        });
+        if (r?.success) {
+          toast(r.message, 'success');
+          refreshStats();
+        } else if (r?.error) {
+          toast(r.error, 'error');
+        }
+      }
+    });
   });
 }
 
@@ -212,58 +345,44 @@ async function importData(data) {
 }
 
 async function exportData(download = false) {
-  const start = $('exportStart').value.trim();
-  const end = $('exportEnd').value.trim();
-  const params = new URLSearchParams();
-  if (start) params.set('start', start);
-  if (end) params.set('end', end);
-  if (download) params.set('download', '1');
-
-  const token = getToken();
-  if (download && token) {
-    const headers = { 'Authorization': `Bearer ${token}` };
-    try {
-      const response = await fetch(`/api/export?${params}`, { headers });
-      if (!response.ok) {
-        toast('导出失败', 'error');
-        return;
-      }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'bing_wallpapers.json';
-      a.click();
-      URL.revokeObjectURL(url);
-      toast('导出成功', 'success');
-      return;
-    } catch {
-      toast('导出失败', 'error');
-      return;
-    }
+  if (!allData.length) {
+    toast('暂无数据', 'error');
+    return;
   }
 
-  window.open(`/api/export?${params}`, '_blank', 'noopener');
-}
+  const start = $('exportStart').value.trim().replace(/-/g, '');
+  const end = $('exportEnd').value.trim().replace(/-/g, '');
 
-function viewMonth(m) {
-  window.open(`/api/month/${encodeURIComponent(m)}`, '_blank', 'noopener');
-}
+  let filtered = allData;
+  if (start) {
+    filtered = filtered.filter(item => item.date.slice(0, 6) >= start);
+  }
+  if (end) {
+    filtered = filtered.filter(item => item.date.slice(0, 6) <= end);
+  }
 
-async function deleteMonth(m) {
-  if (!confirm(`确定删除 ${m}？`)) return;
-  const r = await api('/api/delete-month', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ month: m })
-  });
-  if (r?.success) {
-    toast(`已删除 ${m}`, 'success');
-    refreshStats();
-  } else if (r?.error === '需要认证') {
-    logout();
-  } else if (r?.error) {
-    toast(r.error, 'error');
+  if (!filtered.length) {
+    toast('无匹配数据', 'error');
+    return;
+  }
+
+  filtered.sort((a, b) => a.date.localeCompare(b.date));
+
+  if (download) {
+    const json = JSON.stringify(filtered, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'bing_wallpapers.json';
+    a.click();
+    URL.revokeObjectURL(url);
+    toast(`导出 ${filtered.length} 条数据`, 'success');
+  } else {
+    const json = JSON.stringify(filtered, null, 2);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank', 'noopener');
   }
 }
 
