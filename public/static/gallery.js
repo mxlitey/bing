@@ -78,7 +78,7 @@
     const hero = $('hero');
     const loader = $('heroLoader');
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
-    $('heroTitle').textContent = latest.copyright;
+    $('heroTitle').innerHTML = formatCopyright(latest.copyright);
 
     const img = new Image();
     img.onload = () => {
@@ -87,6 +87,12 @@
     };
     img.onerror = () => { loader.classList.add('hidden'); };
     img.src = latest.url;
+  }
+
+  function formatCopyright(text) {
+    if (!text) return '';
+    const escaped = escapeHtml(text);
+    return escaped.replace(/([（(])/g, '<span class="nobr">$1').replace(/([）)])/g, '$1</span>');
   }
 
   function renderChronicle() {

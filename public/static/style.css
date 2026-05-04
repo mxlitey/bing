@@ -81,8 +81,11 @@ body {
   text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
   max-width: 100%;
   text-align: right;
-  word-break: keep-all;
-  overflow-wrap: break-word;
+  word-break: break-word;
+}
+.hero-title .nobr {
+  white-space: nowrap;
+  display: inline-block;
 }
 
 .timeline-sidebar {

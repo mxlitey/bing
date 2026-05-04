@@ -65,6 +65,11 @@ function escapeHtml(str) {
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+function formatCopyright(str) {
+  if (str == null) return '';
+  return escapeHtml(str).replace(/([（(])/g, '<span class="nobr">$1').replace(/([）)])/g, '$1</span>');
+}
+
 async function getAllData(env) {
   const cached = await env.BING_KV.get(CACHE_KEY, 'json');
   if (cached?.data?.years) return cached;
@@ -89,7 +94,7 @@ async function injectHeroData(env, html) {
 
   return html
     .replace('id="heroDate"></div>', `id="heroDate">${dateFormatted}</div>`)
-    .replace('id="heroTitle"></h1>', `id="heroTitle">${escapeHtml(latest.copyright)}</h1>`);
+    .replace('id="heroTitle"></h1>', `id="heroTitle">${formatCopyright(latest.copyright)}</h1>`);
 }
 
 async function clearCache(env) {
