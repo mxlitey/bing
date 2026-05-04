@@ -711,22 +711,22 @@ tr:hover td { background: var(--table-row-hover); }
   text-overflow: ellipsis;
 }
 
-.tree-day .tree-delete { opacity: 0; }
-.tree-day:hover .tree-delete { opacity: 0.7; }
-.tree-day .tree-delete:hover { opacity: 1; }
+.tree-day .tree-delete { opacity: 0.7; }
+.tree-day:hover .tree-delete { opacity: 1; }
 
 .confirm-dialog {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  backdrop-filter: blur(4px);
 }
 
 .confirm-content {
-  background: var(--card-bg);
+  background: var(--bg-base);
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
   padding: 24px;
@@ -745,7 +745,7 @@ tr:hover td { background: var(--table-row-hover); }
 .confirm-details {
   background: var(--glass-bg);
   border: 1px solid var(--glass-border);
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   padding: 12px 16px;
   margin-bottom: 20px;
 }
@@ -764,7 +764,7 @@ tr:hover td { background: var(--table-row-hover); }
 
 .confirm-btn {
   padding: 10px 20px;
-  border-radius: var(--radius);
+  border-radius: var(--radius-sm);
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
@@ -779,7 +779,7 @@ tr:hover td { background: var(--table-row-hover); }
 }
 
 .confirm-btn.cancel:hover {
-  background: var(--table-row-hover);
+  background: var(--bg-elevated);
   color: var(--text-primary);
 }
 
@@ -789,7 +789,7 @@ tr:hover td { background: var(--table-row-hover); }
 }
 
 .confirm-btn.confirm:hover {
-  background: #dc2626;
+  opacity: 0.9;
 }
 
 @media (max-width: 640px) {
