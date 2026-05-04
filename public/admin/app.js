@@ -249,58 +249,114 @@ async function refreshStats() {
         childrenEl.appendChild(dayEl);
       });
 
+      childrenEl.querySelectorAll('.tree-delete').forEach(delBtn => {
+        delBtn.addEventListener('click', handleDeleteClick);
+      });
+
       monthEl.classList.add('loaded', 'expanded');
     });
   });
 
   container.querySelectorAll('.tree-delete').forEach(el => {
-    el.addEventListener('click', async (e) => {
-      e.stopPropagation();
-      const year = el.dataset.year;
-      const month = el.dataset.month;
-      const date = el.dataset.date;
+    el.addEventListener('click', handleDeleteClick);
+  });
+}
 
-      if (year) {
-        if (!confirm(`确定删除 ${year} 年的所有数据？`)) return;
-        const r = await api('/api/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ year })
-        });
-        if (r?.success) {
-          toast(r.message, 'success');
-          refreshStats();
-        } else if (r?.error) {
-          toast(r.error, 'error');
-        }
-      } else if (month) {
-        if (!confirm(`确定删除 ${month} 的数据？`)) return;
-        const r = await api('/api/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ month })
-        });
-        if (r?.success) {
-          toast(r.message, 'success');
-          refreshStats();
-        } else if (r?.error) {
-          toast(r.error, 'error');
-        }
-      } else if (date) {
-        if (!confirm(`确定删除 ${date} 的数据？`)) return;
-        const r = await api('/api/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ date })
-        });
-        if (r?.success) {
-          toast(r.message, 'success');
-          refreshStats();
-        } else if (r?.error) {
-          toast(r.error, 'error');
-        }
+async function handleDeleteClick(e) {
+  e.stopPropagation();
+  const el = e.target;
+  const year = el.dataset.year;
+  const month = el.dataset.month;
+  const date = el.dataset.date;
+
+  let title = '';
+  let details = [];
+  let body = {};
+
+  if (year) {
+    const yearData = allData.filter(item => item.date.startsWith(year));
+    const months = [...new Set(yearData.map(i => i.date.slice(0, 6)))];
+    title = `删除 ${year} 年数据`;
+    details = [
+      `共 ${yearData.length} 条记录`,
+      `涉及 ${months.length} 个月份`,
+      `月份: ${months.slice(0, 6).join(', ')}${months.length > 6 ? '...' : ''}`
+    ];
+    body = { year };
+  } else if (month) {
+    const monthData = allData.filter(item => item.date.startsWith(month));
+    const year = month.slice(0, 4);
+    const monthNum = month.slice(4, 6);
+    title = `删除 ${year} 年 ${monthNum} 月数据`;
+    details = [
+      `共 ${monthData.length} 条记录`,
+      `日期范围: ${monthData[monthData.length - 1]?.date || ''} ~ ${monthData[0]?.date || ''}`
+    ];
+    body = { month };
+  } else if (date) {
+    const item = allData.find(i => i.date === date);
+    const year = date.slice(0, 4);
+    const month = date.slice(4, 6);
+    const day = date.slice(6, 8);
+    title = `删除 ${year} 年 ${month} 月 ${day} 日数据`;
+    details = [
+      `版权信息: ${item?.copyright || '无'}`
+    ];
+    body = { date };
+  }
+
+  if (!showConfirmDialog(title, details)) return;
+
+  const r = await api('/api/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (r?.success) {
+    toast(r.message, 'success');
+    refreshStats();
+  } else if (r?.error) {
+    toast(r.error, 'error');
+  }
+}
+
+function showConfirmDialog(title, details) {
+  const existing = $('confirmDialog');
+  if (existing) existing.remove();
+
+  const dialog = document.createElement('div');
+  dialog.id = 'confirmDialog';
+  dialog.className = 'confirm-dialog';
+  dialog.innerHTML = `
+    <div class="confirm-content">
+      <div class="confirm-title">${escapeHtml(title)}</div>
+      <div class="confirm-details">
+        ${details.map(d => `<div class="confirm-detail">${escapeHtml(d)}</div>`).join('')}
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-btn cancel">取消</button>
+        <button class="confirm-btn confirm">确认删除</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(dialog);
+
+  return new Promise(resolve => {
+    dialog.querySelector('.cancel').onclick = () => {
+      dialog.remove();
+      resolve(false);
+    };
+    dialog.querySelector('.confirm').onclick = () => {
+      dialog.remove();
+      resolve(true);
+    };
+    dialog.onclick = (e) => {
+      if (e.target === dialog) {
+        dialog.remove();
+        resolve(false);
       }
-    });
+    };
   });
 }
 
