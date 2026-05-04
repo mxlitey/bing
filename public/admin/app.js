@@ -305,7 +305,7 @@ async function handleDeleteClick(e) {
     body = { date };
   }
 
-  if (!showConfirmDialog(title, details)) return;
+  if (!await showConfirmDialog(title, details)) return;
 
   const r = await api('/api/delete', {
     method: 'POST',
