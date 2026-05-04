@@ -341,7 +341,14 @@ export default {
       return PROTECTED_ROUTES[path](ctx_);
     }
 
-    return env.ASSETS.fetch(request);
+    const assetsRes = await env.ASSETS.fetch(request);
+    if (assetsRes.status === 200) {
+      const headers = new Headers(assetsRes.headers);
+      headers.set('Cache-Control', 'public, max-age=2592000, s-maxage=31536000');
+      headers.set('CDN-Cache-Control', 'max-age=31536000');
+      return new Response(assetsRes.body, { status: assetsRes.status, headers });
+    }
+    return assetsRes;
   },
 
   async scheduled(_, env, ctx) {
