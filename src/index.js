@@ -77,7 +77,6 @@ async function injectHeroData(env, html) {
   if (!latest) return html;
 
   const dateFormatted = `${latest.date.slice(0, 4)}-${latest.date.slice(4, 6)}-${latest.date.slice(6, 8)}`;
-  const thumbUrl = latest.url.replace('_UHD.jpg', '_800x480.jpg');
 
   try {
     const imgUrl = new URL(latest.url);
@@ -90,8 +89,7 @@ async function injectHeroData(env, html) {
 
   return html
     .replace('id="heroDate"></div>', `id="heroDate">${dateFormatted}</div>`)
-    .replace('id="heroTitle"></h1>', `id="heroTitle">${escapeHtml(latest.copyright)}</h1>`)
-    .replace('class="hero"', `class="hero" style="background-image:url('${thumbUrl.replace(/'/g, "\\'")}')"`);
+    .replace('id="heroTitle"></h1>', `id="heroTitle">${escapeHtml(latest.copyright)}</h1>`);
 }
 
 async function clearCache(env) {

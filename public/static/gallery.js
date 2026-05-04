@@ -14,7 +14,6 @@
   let preloadObserver = null;
   let scrollEndTimer = null;
   let scrollPriorityTimer = null;
-  const blobUrls = new Set();
 
   async function loadData() {
     try {
@@ -78,21 +77,16 @@
   function renderHero(latest) {
     const hero = $('hero');
     const loader = $('heroLoader');
-    const thumbUrl = latest.url.replace('_UHD.jpg','_800x480.jpg');
-    hero.style.backgroundImage = `url("${thumbUrl.replace(/"/g, '\\"')}")`;
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
     $('heroTitle').textContent = latest.copyright;
 
-    fetch(latest.url, { priority: 'low' })
-      .then(res => { if (!res.ok) throw new Error(); return res.blob(); })
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob);
-        blobUrls.add(blobUrl);
-        hero.style.setProperty('--hero-hd-url', `url("${blobUrl}")`);
-        hero.classList.add('hero-hd');
-        loader.classList.add('hidden');
-      })
-      .catch(() => { loader.classList.add('hidden'); });
+    const img = new Image();
+    img.onload = () => {
+      hero.style.backgroundImage = `url("${latest.url.replace(/"/g, '\\"')}")`;
+      loader.classList.add('hidden');
+    };
+    img.onerror = () => { loader.classList.add('hidden'); };
+    img.src = latest.url;
   }
 
   function renderChronicle() {

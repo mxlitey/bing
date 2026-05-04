@@ -12,8 +12,6 @@
     html::-webkit-scrollbar{display:none}
     body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
     .hero{position:relative;height:100vh;min-height:600px;background-size:cover;background-position:center;background-color:#0a0a0f;display:flex;align-items:flex-end;justify-content:flex-end;padding:24px}
-    .hero::after{content:'';position:absolute;inset:0;background-size:cover;background-position:center;background-image:var(--hero-hd-url);opacity:0;transition:opacity 0.8s ease-in-out;pointer-events:none}
-    .hero.hero-hd::after{opacity:1}
     .hero-loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;transition:opacity 0.4s}
     .hero-loader.hidden{opacity:0;pointer-events:none}
     .hero-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,0.2);border-top-color:rgba(255,255,255,0.8);border-radius:50%;animation:spin 0.8s linear infinite}
