@@ -60,10 +60,38 @@ async function buildCache(env) {
   return cacheData;
 }
 
+function escapeHtml(str) {
+  if (str == null) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 async function getAllData(env) {
   const cached = await env.BING_KV.get(CACHE_KEY, 'json');
   if (cached?.data?.years) return cached;
   return buildCache(env);
+}
+
+async function injectHeroData(env, html) {
+  const cached = await getAllData(env);
+  const latest = cached.data?.[0];
+  if (!latest) return html;
+
+  const dateFormatted = `${latest.date.slice(0, 4)}-${latest.date.slice(4, 6)}-${latest.date.slice(6, 8)}`;
+  const thumbUrl = latest.url.replace('_UHD.jpg', '_800x480.jpg');
+
+  try {
+    const imgUrl = new URL(latest.url);
+    const preconnect = `<link rel="preconnect" href="${imgUrl.origin}">`;
+    html = html.replace('</head>', preconnect + '</head>');
+  } catch {}
+
+  const inlineData = `<script>window.__BING_DATA__=${JSON.stringify(cached)};</script>`;
+  html = html.replace('</head>', inlineData + '</head>');
+
+  return html
+    .replace('id="heroDate"></div>', `id="heroDate">${dateFormatted}</div>`)
+    .replace('id="heroTitle"></h1>', `id="heroTitle">${escapeHtml(latest.copyright)}</h1>`)
+    .replace('class="hero"', `class="hero" style="background-image:url('${thumbUrl.replace(/'/g, "\\'")}')"`);
 }
 
 async function clearCache(env) {
@@ -341,7 +369,16 @@ export default {
       return PROTECTED_ROUTES[path](ctx_);
     }
 
-    return env.ASSETS.fetch(request);
+    const assetsRes = await env.ASSETS.fetch(request);
+    if (path === '/' && assetsRes.status === 200) {
+      const html = await assetsRes.text();
+      const injectedHtml = await injectHeroData(env, html);
+      return new Response(injectedHtml, {
+        status: 200,
+        headers: { 'content-type': 'text/html; charset=UTF-8' }
+      });
+    }
+    return assetsRes;
   },
 
   async scheduled(_, env, ctx) {

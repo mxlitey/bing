@@ -18,25 +18,43 @@
 
   async function loadData() {
     try {
+      const inlineData = window.__BING_DATA__;
+      if (inlineData) {
+        allData = inlineData.data || inlineData;
+        years = inlineData.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
+        groupData();
+        renderChronicle();
+        renderTimeline();
+        initObservers();
+      }
+
       const response = await fetch('/json');
       if (!response.ok) throw new Error('请求失败');
       const cached = await response.json();
-      allData = cached.data || cached;
-      years = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
+      const newData = cached.data || cached;
+      const newYears = cached.years || [...new Set(newData.map(i => i.date.slice(0, 4)))].sort().reverse();
+
+      const hasUpdate = !inlineData || (newData[0] && newData[0].date !== allData[0]?.date);
+
+      if (hasUpdate) {
+        allData = newData;
+        years = newYears;
+        if (allData.length) renderHero(allData[0]);
+        groupData();
+        renderChronicle();
+        renderTimeline();
+        initObservers();
+      }
 
       const skeleton = $('skeleton');
       if (skeleton) skeleton.remove();
-
-      if (allData.length) renderHero(allData[0]);
-      groupData();
-      renderChronicle();
-      renderTimeline();
-      initObservers();
     } catch (err) {
       const skeleton = $('skeleton');
       if (skeleton) skeleton.remove();
-      const chronicle = $('chronicle');
-      chronicle.innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
+      if (!allData.length) {
+        const chronicle = $('chronicle');
+        chronicle.innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
+      }
     }
   }
 

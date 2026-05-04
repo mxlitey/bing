@@ -5,8 +5,25 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Bing 每日壁纸画廊，自动获取高清壁纸">
   <title>Bing Wallpaper</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#0a0a0f;--bg-card:rgba(20,20,30,0.85);--text:#f0f0f5;--text-alt:#a0a0b0;--text-muted:#606070;--accent:#60a5fa;--border:rgba(255,255,255,0.08);--radius:12px}
+    html{scroll-behavior:smooth;scrollbar-width:none}
+    html::-webkit-scrollbar{display:none}
+    body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display','Segoe UI',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.6}
+    .hero{position:relative;height:100vh;min-height:600px;background-size:cover;background-position:center;background-color:#0a0a0f;display:flex;align-items:flex-end;justify-content:flex-end;padding:24px}
+    .hero::after{content:'';position:absolute;inset:0;background-size:cover;background-position:center;background-image:var(--hero-hd-url);opacity:0;transition:opacity 0.8s ease-in-out;pointer-events:none}
+    .hero.hero-hd::after{opacity:1}
+    .hero-loader{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:2;transition:opacity 0.4s}
+    .hero-loader.hidden{opacity:0;pointer-events:none}
+    .hero-spinner{width:36px;height:36px;border:3px solid rgba(255,255,255,0.2);border-top-color:rgba(255,255,255,0.8);border-radius:50%;animation:spin 0.8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .hero-content{text-align:right;position:relative;z-index:1}
+    .hero-date{display:inline-block;font-size:15px;color:rgba(255,255,255,0.85);margin-bottom:10px;font-weight:500;text-shadow:0 1px 8px rgba(0,0,0,0.6)}
+    .hero-title{font-size:16px;font-weight:400;color:rgba(255,255,255,0.95);text-shadow:0 1px 8px rgba(0,0,0,0.6);white-space:nowrap}
+  </style>
   <link rel="stylesheet" href="/static/style.css">
-  <script>history.scrollRestoration = 'manual';</script>
+  <script>history.scrollRestoration='manual';</script>
 </head>
 <body>
   <section class="hero" id="hero">
