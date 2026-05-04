@@ -81,18 +81,20 @@
 
 ### 公开接口
 
-| 端点         | 方法   | 说明       |
-| ------------ | ------ | ---------- |
-| `/json`      | GET    | 获取所有数据 |
-| `/api/login` | POST   | 登录认证   |
+| 端点         | 方法   | 说明                                              |
+| ------------ | ------ | ------------------------------------------------- |
+| `/json`      | GET    | 获取所有壁纸数据，返回数组 `[{ date, url, copyright }]` |
+| `/api/login` | POST   | 登录认证，Body: `{ "token": "xxx" }`              |
 
 ### 认证接口（需要 Token）
 
-| 端点          | 方法   | 说明     |
-| ------------- | ------ | -------- |
-| `/update`     | GET    | 手动更新 |
-| `/api/import` | POST   | 导入数据 |
-| `/api/delete` | POST   | 删除数据 |
+请求头添加 `Authorization: Bearer <token>`
+
+| 端点          | 方法   | 说明                                       |
+| ------------- | ------ | ------------------------------------------ |
+| `/update`     | GET    | 手动更新，从 Bing API 获取最新壁纸          |
+| `/api/import` | POST   | 导入数据，Body: `[{ date, url, copyright }]` |
+| `/api/delete` | POST   | 删除数据，支持按年/月/日删除                |
 
 ### 删除接口参数
 
@@ -108,7 +110,6 @@
 
 ```bash
 /json?fields=date,url
-/api/month/202605?fields=copyright
 ```
 
 ### 数据格式
