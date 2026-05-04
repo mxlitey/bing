@@ -191,7 +191,6 @@
 
     if (!isExpanded) {
       group.classList.add('expanded');
-      scrollToElement(`y${year}`, year, '');
     }
   }
 
