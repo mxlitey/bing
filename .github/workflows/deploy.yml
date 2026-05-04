@@ -35,6 +35,9 @@ jobs:
       - name: Configure wrangler
         run: |
           sed -i "s/id = \"your-kv-namespace-id\"/id = \"$KV_ID\"/g" wrangler.toml
+          if [ -n "${{ vars.BING_API }}" ]; then
+            sed -i "s|# BING_API = .*|BING_API = \"${{ vars.BING_API }}\"|g" wrangler.toml
+          fi
 
       - name: Deploy
         run: wrangler deploy

@@ -1,4 +1,4 @@
-const BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
+const DEFAULT_BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
 const PREFIX = 'bing_';
 const CACHE_KEY = 'cache_all_data';
 const CACHE_TTL = 86400;
@@ -95,7 +95,8 @@ function validateEntry(item) {
 
 async function updateBing(env) {
   try {
-    const res = await fetch(BING_API);
+    const bingApi = env.BING_API || DEFAULT_BING_API;
+    const res = await fetch(bingApi);
     if (!res.ok) return { success: false, error: 'Bing API 请求失败' };
 
     const data = await res.json();

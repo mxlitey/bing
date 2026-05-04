@@ -26,13 +26,44 @@
 
 在 Fork 的仓库中，进入 `Settings > Secrets and variables > Actions`，添加：
 
-| Name                    | Value            |
-| ----------------------- | ---------------- |
+| Name                    | Value               |
+| ----------------------- | ------------------- |
 | `CLOUDFLARE_API_TOKEN`  | 上一步创建的 API Token |
-| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID |
-| `AUTH_TOKEN`            | 管理面板认证密码         |
+| `CLOUDFLARE_ACCOUNT_ID` | Cloudflare 账户 ID  |
+| `AUTH_TOKEN`            | 管理面板认证密码      |
 
-**4. 推送代码**
+**4. （可选）配置 Bing 市场**
+
+如需使用其他市场的壁纸，可在 `Settings > Secrets and variables > Actions > Variables` 中添加：
+
+| Name       | Value                      |
+| ---------- | -------------------------- |
+| `BING_API` | 选择下表中的 API 链接        |
+
+### Bing 壁纸市场列表
+
+不同市场的 Bing 壁纸 API 链接：
+
+| 市场     | 地区         | API 链接                                                      |
+| -------- | ------------ | ------------------------------------------------------------ |
+| zh-CN    | 中国大陆     | `https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN` |
+| zh-HK    | 中国香港     | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-HK` |
+| zh-TW    | 中国台湾     | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-TW` |
+| en-US    | 美国         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US` |
+| en-GB    | 英国         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-GB` |
+| ja-JP    | 日本         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=ja-JP` |
+| ko-KR    | 韩国         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=ko-KR` |
+| de-DE    | 德国         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=de-DE` |
+| fr-FR    | 法国         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=fr-FR` |
+| it-IT    | 意大利       | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=it-IT` |
+| es-ES    | 西班牙       | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=es-ES` |
+| pt-BR    | 巴西         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=pt-BR` |
+| ru-RU    | 俄罗斯       | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=ru-RU` |
+| en-AU    | 澳大利亚     | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-AU` |
+| en-CA    | 加拿大       | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-CA` |
+| en-IN    | 印度         | `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-IN` |
+
+**5. 推送代码**
 
 推送到 `main` 分支即可自动部署。
 

@@ -12,3 +12,6 @@ id = "your-kv-namespace-id"
 
 [triggers]
 crons = ["5 16 * * *"]
+
+[vars]
+# BING_API = "https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN"
