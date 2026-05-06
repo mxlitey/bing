@@ -207,19 +207,23 @@ async function updateBingForMarket(env, market) {
   try {
     const bingApi = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
     const res = await fetch(bingApi);
-    if (!res.ok) return { success: false, market, error: 'Bing API 请求失败' };
+    if (!res.ok) return { success: false, market, error: 'Bing API 请求失败: ' + res.status };
 
     const data = await res.json();
-    if (!data.images?.length) return { success: false, market, error: '获取失败' };
+    if (!data.images?.length) return { success: false, market, error: '获取失败: 无图片数据' };
 
     const img = data.images[0];
     const entry = {
-      date: img.enddate,
+      date: String(img.enddate),
       title: img.title || null,
       copyright: img.copyright || null,
       image_url: `https://www.bing.com${img.urlbase}_UHD.jpg`,
       description: null
     };
+
+    if (!/^\d{8}$/.test(entry.date)) {
+      return { success: false, market, error: '日期格式错误: ' + entry.date };
+    }
 
     const key = getMonthKey(entry.date);
     const monthData = await getMonthData(env, key);
@@ -228,16 +232,19 @@ async function updateBingForMarket(env, market) {
       monthData[market] = [];
     }
 
-    if (monthData[market].some(i => i.date === entry.date)) {
+    const existingIndex = monthData[market].findIndex(i => i.date === entry.date);
+    if (existingIndex >= 0) {
       return { success: true, market, message: '已存在', date: entry.date };
     }
 
     monthData[market].push(entry);
     monthData[market].sort((a, b) => a.date.localeCompare(b.date));
-    await saveMonthData(env, key, monthData);
+    
+    await env.BING_KV.put(key, JSON.stringify(monthData));
     await updateMarketConfigRange(env, market, entry.date.substring(0, 6));
+    await clearCache(env);
 
-    return { success: true, market, message: '更新成功', data: entry, total: monthData[market].length };
+    return { success: true, market, message: '更新成功', date: entry.date, key };
   } catch (e) {
     return { success: false, market, error: '更新失败: ' + e.message };
   }
