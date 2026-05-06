@@ -1,3 +1,19 @@
+const MARKET_NAMES = {
+  'zh-CN': '中国',
+  'en-US': '美国',
+  'en-GB': '英国',
+  'de-DE': '德国',
+  'fr-FR': '法国',
+  'ja-JP': '日本',
+  'en-CA': '加拿大(英)',
+  'fr-CA': '加拿大(法)',
+  'en-IN': '印度',
+  'en-WW': '国际',
+  'es-ES': '西班牙',
+  'it-IT': '意大利',
+  'pt-BR': '巴西'
+};
+
 const $ = id => document.getElementById(id);
 
 const escapeHtml = (str) => {
@@ -205,6 +221,7 @@ function renderMonthTree(allData) {
 
   Object.keys(tree).sort().forEach(market => {
     const marketData = tree[market];
+    const marketName = MARKET_NAMES[market] || market;
     const marketEl = document.createElement('div');
     marketEl.className = 'tree-market';
     marketEl.innerHTML = `
@@ -213,6 +230,7 @@ function renderMonthTree(allData) {
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
         <span class="tree-label">${escapeHtml(market)}</span>
+        <span class="tree-label-sub">${escapeHtml(marketName)}</span>
         <span class="tree-count">${escapeHtml(String(marketData.count))} 张</span>
         <span class="tree-delete" data-market="${escapeHtml(market)}">删除</span>
       </div>
@@ -255,7 +273,7 @@ function renderMonthTree(allData) {
         `;
 
         const monthChildrenEl = monthEl.querySelector('.tree-children');
-        monthItems.sort((a, b) => a.date.localeCompare(b.date)).forEach(item => {
+        monthItems.sort((a, b) => b.date.localeCompare(a.date)).forEach(item => {
           const dayEl = document.createElement('div');
           dayEl.className = 'tree-day';
           dayEl.innerHTML = `

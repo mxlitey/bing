@@ -6,8 +6,6 @@ const DEFAULT_MARKETS = [
 const PREFIX = 'bing_';
 const ARCHIVE_PREFIX = 'archive_';
 const MARKET_CONFIG_KEY = 'market_time_config';
-const CACHE_KEY = 'cache_all_data';
-const CACHE_TTL = 86400;
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 
 const CORS_HEADERS = {
@@ -52,7 +50,6 @@ async function getMonthData(env, key) {
 
 async function saveMonthData(env, key, data) {
   await env.BING_KV.put(key, JSON.stringify(data));
-  await clearCache(env);
 }
 
 async function getArchiveData(env, year) {
@@ -73,7 +70,7 @@ async function getAllArchiveKeys(env) {
   return list.keys.map(k => k.name).sort().reverse();
 }
 
-async function buildCache(env) {
+async function getAllData(env) {
   const monthKeys = await getAllMonthKeys(env);
   const archiveKeys = await getAllArchiveKeys(env);
   const marketConfig = await getMarketConfig(env);
@@ -99,13 +96,7 @@ async function buildCache(env) {
     }
   }
 
-  const cacheData = {
-    data,
-    marketConfig
-  };
-  await env.BING_KV.put(CACHE_KEY, JSON.stringify(cacheData), { expirationTtl: CACHE_TTL });
-
-  return cacheData;
+  return { data, marketConfig };
 }
 
 function escapeHtml(str) {
@@ -116,12 +107,6 @@ function escapeHtml(str) {
 function formatCopyright(str) {
   if (str == null) return '';
   return escapeHtml(str).replace(/([（(])/g, '<span class="nobr">$1').replace(/([）)])/g, '$1</span>');
-}
-
-async function getAllData(env) {
-  const cached = await env.BING_KV.get(CACHE_KEY, 'json');
-  if (cached?.data) return cached;
-  return buildCache(env);
 }
 
 async function getRecentData(env, monthCount = 2) {
@@ -182,10 +167,6 @@ async function injectHeroData(env, html) {
   return html
     .replace('id="heroDate"></div>', `id="heroDate">${dateFormatted}</div>`)
     .replace('id="heroTitle"></h1>', `id="heroTitle">${formatCopyright(latest.copyright)}</h1>`);
-}
-
-async function clearCache(env) {
-  await env.BING_KV.delete(CACHE_KEY);
 }
 
 async function updateMarketConfigRange(env, market, newYm) {
@@ -278,7 +259,6 @@ async function updateAllMarkets(env) {
         await updateMarketConfigRange(env, market, result.date.substring(0, 6));
       }
     }
-    await clearCache(env);
   }
   
   await Promise.all(writeOps);
@@ -325,8 +305,6 @@ async function archiveYear(env, year) {
     }
   }
   await saveMarketConfig(env, config);
-
-  await clearCache(env);
 
   return {
     success: true,
@@ -474,8 +452,6 @@ async function handleImport(body, env) {
   }
 
   await Promise.all(writeOps);
-
-  await clearCache(env);
 
   const archivedCount = Object.keys(archiveDataMap).filter(y => !archivedYears.has(y)).length;
   
@@ -628,7 +604,6 @@ const PROTECTED_ROUTES = {
       delete config[market];
       await saveMarketConfig(env, config);
 
-      await clearCache(env);
       return json({ success: true, message: `已删除 ${market} 的所有数据` });
     }
 
@@ -671,7 +646,6 @@ const PROTECTED_ROUTES = {
             }
           }
         }
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedDate} 的 ${market} 数据` });
       } else {
         if (isArchived) {
@@ -687,7 +661,6 @@ const PROTECTED_ROUTES = {
         } else {
           await env.BING_KV.delete(PREFIX + ym);
         }
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedDate} 所有市场数据` });
       }
     }
@@ -722,7 +695,6 @@ const PROTECTED_ROUTES = {
             await saveMonthData(env, monthKey, monthData);
           }
         }
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedMonth} 的 ${market} 数据` });
       } else {
         if (isArchived) {
@@ -736,7 +708,6 @@ const PROTECTED_ROUTES = {
         } else {
           await env.BING_KV.delete(PREFIX + normalizedMonth);
         }
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedMonth} 所有市场数据` });
       }
     }
@@ -775,7 +746,6 @@ const PROTECTED_ROUTES = {
             await saveMonthData(env, k, monthData);
           }
         }
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${market} 数据` });
       } else {
         const archiveKey = ARCHIVE_PREFIX + normalizedYear;
@@ -787,7 +757,6 @@ const PROTECTED_ROUTES = {
           await env.BING_KV.delete(k);
         }
 
-        await clearCache(env);
         return json({ success: true, message: `已删除 ${normalizedYear} 年所有市场数据` });
       }
     }
