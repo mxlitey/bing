@@ -111,7 +111,7 @@ body {
 
 .market-selector {
   position: fixed;
-  right: 24px;
+  left: 24px;
   bottom: 24px;
   z-index: 101;
 }
@@ -144,7 +144,7 @@ body {
 .market-dropdown {
   position: absolute;
   bottom: 32px;
-  right: 0;
+  left: 0;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
@@ -461,7 +461,7 @@ body {
     border-radius: 12px;
   }
   .timeline-sidebar .timeline-dot { display: none; }
-  .market-selector { right: 16px; bottom: 80px; }
+  .market-selector { left: 16px; bottom: 80px; }
   .chronicle { padding-right: 16px; padding-left: 16px; padding-bottom: 80px; }
   .thumb-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
   .skeleton-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
