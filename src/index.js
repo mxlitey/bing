@@ -1,8 +1,35 @@
 const DEFAULT_BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
 const PREFIX = 'bing_';
 const CACHE_KEY = 'cache_all_data';
+const CONFIG_KEY = 'market_time_config';
 const CACHE_TTL = 86400;
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
+
+const MARKET_API_MAP = {
+  'zh-CN': 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN',
+  'en-US': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-US',
+  'en-GB': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-GB',
+  'en-AU': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-AU',
+  'en-CA': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=en-CA',
+  'ja-JP': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=ja-JP',
+  'de-DE': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=de-DE',
+  'fr-FR': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=fr-FR',
+  'zh-TW': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-TW',
+  'zh-HK': 'https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-HK',
+};
+
+const MARKET_NAMES = {
+  'zh-CN': '中国',
+  'en-US': '美国',
+  'en-GB': '英国',
+  'en-AU': '澳大利亚',
+  'en-CA': '加拿大',
+  'ja-JP': '日本',
+  'de-DE': '德国',
+  'fr-FR': '法国',
+  'zh-TW': '台湾',
+  'zh-HK': '香港',
+};
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -16,8 +43,12 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 });
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
-const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || [];
-const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).filter(k => !k.startsWith('cache_')).sort().reverse();
+const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || { market_time_config: [], wallpaper_list: [] };
+const getConfig = async (env) => {
+  const config = await env.BING_KV.get(CONFIG_KEY, 'json');
+  return config || { market_time_config: [], wallpaper_list: [] };
+};
+const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).filter(k => !k.startsWith('cache_') && k !== CONFIG_KEY).sort().reverse();
 
 function filterFields(data, fields) {
   if (!fields) return data;
@@ -42,19 +73,24 @@ async function buildCache(env) {
   const results = await Promise.all(keys.map(k => env.BING_KV.get(k, 'json')));
 
   const all = [];
+  const marketSet = new Set();
   const years = new Set();
 
   for (const d of results) {
-    if (d) {
-      all.push(...d);
-      if (d[0]) years.add(d[0].date.substring(0, 4));
+    if (d?.wallpaper_list) {
+      all.push(...d.wallpaper_list);
+      d.wallpaper_list.forEach(item => {
+        if (item.belong_market) marketSet.add(item.belong_market);
+        if (item.date) years.add(item.date.substring(0, 4));
+      });
     }
   }
 
   all.sort((a, b) => b.date.localeCompare(a.date));
   const yearsArr = Array.from(years).sort().reverse();
+  const markets = Array.from(marketSet).sort();
 
-  const cacheData = { data: all, years: yearsArr };
+  const cacheData = { data: all, years: yearsArr, markets };
   await env.BING_KV.put(CACHE_KEY, JSON.stringify(cacheData), { expirationTtl: CACHE_TTL });
 
   return cacheData;
@@ -114,17 +150,20 @@ function validateEntry(item) {
   return true;
 }
 
-async function updateBing(env) {
+async function fetchMarketWallpaper(env, marketCode) {
+  const apiUrl = MARKET_API_MAP[marketCode];
+  if (!apiUrl) return { success: false, error: `不支持的市场: ${marketCode}` };
+
   try {
-    const bingApi = env.BING_API || DEFAULT_BING_API;
-    const res = await fetch(bingApi);
-    if (!res.ok) return { success: false, error: 'Bing API 请求失败' };
+    const res = await fetch(apiUrl);
+    if (!res.ok) return { success: false, error: `Bing API 请求失败 (${marketCode})` };
 
     const data = await res.json();
-    if (!data.images?.length) return { success: false, error: '获取失败' };
+    if (!data.images?.length) return { success: false, error: `获取壁纸失败 (${marketCode})` };
 
     const img = data.images[0];
     const entry = {
+      belong_market: MARKET_NAMES[marketCode] || marketCode,
       date: img.enddate,
       copyright: img.copyright || '',
       url: `https://cn.bing.com${img.urlbase}_UHD.jpg`
@@ -133,44 +172,101 @@ async function updateBing(env) {
     const key = getMonthKey(entry.date);
     const monthData = await getMonthData(env, key);
 
-    if (monthData.some(i => i.date === entry.date)) {
-      return { success: true, message: '已存在', date: entry.date };
+    const existingIndex = monthData.wallpaper_list?.findIndex(i => i.date === entry.date && i.belong_market === entry.belong_market);
+    if (existingIndex !== undefined && existingIndex >= 0) {
+      monthData.wallpaper_list[existingIndex] = entry;
+    } else {
+      if (!monthData.wallpaper_list) monthData.wallpaper_list = [];
+      monthData.wallpaper_list.push(entry);
     }
 
-    monthData.push(entry);
-    monthData.sort((a, b) => a.date.localeCompare(b.date));
+    monthData.wallpaper_list.sort((a, b) => a.date.localeCompare(b.date));
     await saveMonthData(env, key, monthData);
 
-    return { success: true, message: '更新成功', data: entry, total: monthData.length };
+    return { success: true, market: marketCode, marketName: entry.belong_market, data: entry, total: monthData.wallpaper_list.length };
   } catch (e) {
-    return { success: false, error: '更新失败: ' + e.message };
+    return { success: false, error: `采集失败 (${marketCode}): ${e.message}` };
   }
 }
 
-async function handleImport(body, env) {
-  const items = Array.isArray(body) ? body : body?.data || [];
-  if (!items.length) return { success: false, error: '无数据' };
+async function updateAllMarkets(env) {
+  const config = await getConfig(env);
+  const marketConfigs = config.market_time_config || [];
+  
+  if (marketConfigs.length === 0) {
+    const marketCodes = Object.keys(MARKET_API_MAP);
+    const results = await Promise.all(marketCodes.map(code => fetchMarketWallpaper(env, code)));
+    const successCount = results.filter(r => r.success).length;
+    return { success: true, message: `采集完成,成功 ${successCount}/${marketCodes.length} 个市场`, results };
+  }
 
-  const validItems = items.filter(validateEntry);
+  const currentYM = new Date().toISOString().substring(0, 7).replace('-', '');
+  const results = [];
+
+  for (const marketConfig of marketConfigs) {
+    const { country_market, start_ym, end_ym } = marketConfig;
+    if (currentYM < start_ym || currentYM > end_ym) {
+      results.push({ success: true, skipped: true, market: country_market, message: `不在时间范围内 (${start_ym} - ${end_ym})` });
+      continue;
+    }
+
+    const marketCode = Object.keys(MARKET_NAMES).find(k => MARKET_NAMES[k] === country_market);
+    if (!marketCode) {
+      results.push({ success: false, error: `未找到市场代码: ${country_market}` });
+      continue;
+    }
+
+    const result = await fetchMarketWallpaper(env, marketCode);
+    results.push(result);
+  }
+
+  const successCount = results.filter(r => r.success && !r.skipped).length;
+  return { success: true, message: `采集完成,成功 ${successCount}/${marketConfigs.length} 个市场`, results };
+}
+
+async function updateBing(env) {
+  return updateAllMarkets(env);
+}
+
+async function handleImport(body, env) {
+  const wallpaperList = body.wallpaper_list || (Array.isArray(body) ? body : body?.data || []);
+  if (!wallpaperList.length) return { success: false, error: '无数据' };
+
+  const validItems = wallpaperList.filter(validateEntry);
   if (!validItems.length) return { success: false, error: '无有效数据' };
 
   const monthMap = {};
   for (const item of validItems) {
     const key = getMonthKey(item.date);
-    (monthMap[key] ??= []).push(item);
+    if (!monthMap[key]) {
+      monthMap[key] = { market_time_config: [], wallpaper_list: [] };
+    }
+    monthMap[key].wallpaper_list.push(item);
   }
 
   let imported = 0, skipped = 0;
   for (const [key, newItems] of Object.entries(monthMap)) {
     const existing = await getMonthData(env, key);
-    const dates = new Set(existing.map(i => i.date));
-    for (const item of newItems) {
-      if (dates.has(item.date)) { skipped++; continue; }
-      existing.push(item);
+    if (!existing.wallpaper_list) existing.wallpaper_list = [];
+    const existingDates = new Set(existing.wallpaper_list.map(i => `${i.date}_${i.belong_market}`));
+    
+    for (const item of newItems.wallpaper_list) {
+      const itemKey = `${item.date}_${item.belong_market}`;
+      if (existingDates.has(itemKey)) {
+        skipped++;
+        continue;
+      }
+      existing.wallpaper_list.push(item);
       imported++;
     }
-    existing.sort((a, b) => a.date.localeCompare(b.date));
+    existing.wallpaper_list.sort((a, b) => a.date.localeCompare(b.date));
     await saveMonthData(env, key, existing);
+  }
+
+  if (body.market_time_config) {
+    const config = await getConfig(env);
+    config.market_time_config = body.market_time_config;
+    await env.BING_KV.put(CONFIG_KEY, JSON.stringify(config));
   }
 
   await buildCache(env);
@@ -223,6 +319,66 @@ const PROTECTED_ROUTES = {
   '/update': async ({ env }) => {
     return json(await updateBing(env));
   },
+  '/api/config': async ({ env, request }) => {
+    if (request.method === 'GET') {
+      const config = await getConfig(env);
+      return json(config);
+    }
+    
+    if (request.method === 'POST') {
+      const contentType = request.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return json({ success: false, error: 'Content-Type 必须为 application/json' }, 400);
+      }
+      
+      let body;
+      try {
+        body = await request.json();
+      } catch {
+        return json({ success: false, error: '请求格式错误' }, 400);
+      }
+      
+      const { market_time_config } = body;
+      if (!Array.isArray(market_time_config)) {
+        return json({ success: false, error: 'market_time_config 必须是数组' }, 400);
+      }
+      
+      const validatedConfig = [];
+      for (const item of market_time_config) {
+        if (!item.country_market || typeof item.country_market !== 'string') {
+          return json({ success: false, error: '每个配置项必须包含 country_market' }, 400);
+        }
+        if (!item.start_ym || !/^\d{6}$/.test(item.start_ym)) {
+          return json({ success: false, error: 'start_ym 格式错误,应为 YYYYMM' }, 400);
+        }
+        if (!item.end_ym || !/^\d{6}$/.test(item.end_ym)) {
+          return json({ success: false, error: 'end_ym 格式错误,应为 YYYYMM' }, 400);
+        }
+        if (item.start_ym > item.end_ym) {
+          return json({ success: false, error: 'start_ym 不能大于 end_ym' }, 400);
+        }
+        
+        validatedConfig.push({
+          country_market: item.country_market,
+          start_ym: item.start_ym,
+          end_ym: item.end_ym
+        });
+      }
+      
+      const config = await getConfig(env);
+      config.market_time_config = validatedConfig;
+      await env.BING_KV.put(CONFIG_KEY, JSON.stringify(config));
+      await buildCache(env);
+      
+      return json({ success: true, message: '配置已保存', config: validatedConfig });
+    }
+    
+    return json({ success: false, error: '不支持的请求方法' }, 405);
+  },
+  '/api/markets': async ({ env }) => {
+    const availableMarkets = Object.entries(MARKET_NAMES).map(([code, name]) => ({ code, name }));
+    return json({ success: true, markets: availableMarkets });
+  },
   '/api/import': async ({ env, request }) => {
     const contentType = request.headers.get('content-type') || '';
     if (!contentType.includes('application/json')) {
@@ -247,7 +403,7 @@ const PROTECTED_ROUTES = {
     } catch {
       return json({ success: false, error: '请求格式错误' }, 400);
     }
-    const { year, month, date } = body;
+    const { year, month, date, market } = body;
 
     if (date) {
       const normalizedDate = String(date).replace(/-/g, '');
@@ -255,15 +411,24 @@ const PROTECTED_ROUTES = {
         return json({ success: false, error: '日期格式错误，应为 YYYYMMDD 格式' }, 400);
       }
       const monthKey = PREFIX + normalizedDate.slice(0, 6);
-      const monthData = await env.BING_KV.get(monthKey, 'json') || [];
-      const newData = monthData.filter(item => item.date !== normalizedDate);
-      if (newData.length === 0) {
+      const monthData = await getMonthData(env, monthKey);
+      if (!monthData.wallpaper_list) monthData.wallpaper_list = [];
+      
+      if (market) {
+        monthData.wallpaper_list = monthData.wallpaper_list.filter(
+          item => !(item.date === normalizedDate && item.belong_market === market)
+        );
+      } else {
+        monthData.wallpaper_list = monthData.wallpaper_list.filter(item => item.date !== normalizedDate);
+      }
+      
+      if (monthData.wallpaper_list.length === 0) {
         await env.BING_KV.delete(monthKey);
       } else {
-        await env.BING_KV.put(monthKey, JSON.stringify(newData));
+        await saveMonthData(env, monthKey, monthData);
       }
       await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedDate}` });
+      return json({ success: true, message: `已删除 ${normalizedDate}${market ? ` (${market})` : ''}` });
     }
 
     if (month) {
@@ -271,9 +436,21 @@ const PROTECTED_ROUTES = {
       if (!/^\d{6}$/.test(normalizedMonth)) {
         return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
       }
-      await env.BING_KV.delete(PREFIX + normalizedMonth);
+      if (market) {
+        const monthData = await getMonthData(env, PREFIX + normalizedMonth);
+        if (monthData.wallpaper_list) {
+          monthData.wallpaper_list = monthData.wallpaper_list.filter(item => item.belong_market !== market);
+          if (monthData.wallpaper_list.length > 0) {
+            await saveMonthData(env, PREFIX + normalizedMonth, monthData);
+          } else {
+            await env.BING_KV.delete(PREFIX + normalizedMonth);
+          }
+        }
+      } else {
+        await env.BING_KV.delete(PREFIX + normalizedMonth);
+      }
       await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedMonth}` });
+      return json({ success: true, message: `已删除 ${normalizedMonth}${market ? ` (${market})` : ''}` });
     }
 
     if (year) {
@@ -283,11 +460,27 @@ const PROTECTED_ROUTES = {
       }
       const keys = await getAllKeys(env);
       const yearKeys = keys.filter(k => k.replace(PREFIX, '').startsWith(normalizedYear));
-      for (const k of yearKeys) {
-        await env.BING_KV.delete(k);
+      
+      if (market) {
+        for (const k of yearKeys) {
+          const monthData = await getMonthData(env, k);
+          if (monthData.wallpaper_list) {
+            monthData.wallpaper_list = monthData.wallpaper_list.filter(item => item.belong_market !== market);
+            if (monthData.wallpaper_list.length > 0) {
+              await saveMonthData(env, k, monthData);
+            } else {
+              await env.BING_KV.delete(k);
+            }
+          }
+        }
+      } else {
+        for (const k of yearKeys) {
+          await env.BING_KV.delete(k);
+        }
       }
+      
       await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${yearKeys.length} 个月份数据` });
+      return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${yearKeys.length} 个月份数据${market ? ` (${market})` : ''}` });
     }
 
     return json({ success: false, error: '请指定 year、month 或 date 参数' }, 400);
