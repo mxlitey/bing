@@ -129,9 +129,12 @@ body {
   overflow: hidden;
   padding: 0;
 }
-.square-flag {
-  width: 48px;
-  height: 48px;
+.market-btn .square-flag,
+.market-btn .fi.fis {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: 4px;
   display: inline-block;
   overflow: hidden;
@@ -177,16 +180,15 @@ body {
   background: rgba(96, 165, 250, 0.2);
   color: var(--accent);
 }
-.market-option .fi {
-  width: 48px;
-  height: 48px;
-  border-radius: 3px;
-  flex-shrink: 0;
-}
-.market-option .square-flag {
-  width: 48px;
-  height: 48px;
+.market-option .fi,
+.market-option .square-flag,
+.market-option .fi.fis {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px;
+  min-height: 48px;
   border-radius: 4px;
+  flex-shrink: 0;
 }
 .market-option span:last-child {
   white-space: nowrap;
