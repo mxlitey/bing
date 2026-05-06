@@ -117,8 +117,8 @@ body {
 }
 
 .market-btn {
-  width: 32px;
-  height: 32px;
+  width: 25px;
+  height: 25px;
   border-radius: 4px;
   border: none;
   background: transparent;
@@ -131,10 +131,10 @@ body {
 }
 .market-btn .square-flag,
 .market-btn .fi.fis {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px;
-  min-height: 32px;
+  width: 25px !important;
+  height: 25px !important;
+  min-width: 25px;
+  min-height: 25px;
   border-radius: 4px;
   display: inline-block;
   overflow: hidden;
@@ -183,10 +183,10 @@ body {
 .market-option .fi,
 .market-option .square-flag,
 .market-option .fi.fis {
-  width: 32px !important;
-  height: 32px !important;
-  min-width: 32px;
-  min-height: 32px;
+  width: 25px !important;
+  height: 25px !important;
+  min-width: 25px;
+  min-height: 25px;
   border-radius: 4px;
   flex-shrink: 0;
 }
