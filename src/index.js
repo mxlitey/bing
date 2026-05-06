@@ -203,7 +203,7 @@ async function updateMarketConfigRange(env, market, newYm) {
   await saveMarketConfig(env, config);
 }
 
-async function updateBingForMarket(env, market) {
+async function updateBingForMarket(env, market, sharedMonthData) {
   try {
     const bingApi = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
     const res = await fetch(bingApi);
@@ -226,7 +226,11 @@ async function updateBingForMarket(env, market) {
     }
 
     const key = getMonthKey(entry.date);
-    const monthData = await getMonthData(env, key);
+    
+    if (!sharedMonthData[key]) {
+      sharedMonthData[key] = await getMonthData(env, key);
+    }
+    const monthData = sharedMonthData[key];
 
     if (!monthData[market]) {
       monthData[market] = [];
@@ -239,12 +243,8 @@ async function updateBingForMarket(env, market) {
 
     monthData[market].push(entry);
     monthData[market].sort((a, b) => a.date.localeCompare(b.date));
-    
-    await env.BING_KV.put(key, JSON.stringify(monthData));
-    await updateMarketConfigRange(env, market, entry.date.substring(0, 6));
-    await clearCache(env);
 
-    return { success: true, market, message: '更新成功', date: entry.date, key };
+    return { success: true, market, message: '更新成功', date: entry.date, key, needClearCache: true };
   } catch (e) {
     return { success: false, market, error: '更新失败: ' + e.message };
   }
@@ -253,7 +253,35 @@ async function updateBingForMarket(env, market) {
 async function updateAllMarkets(env) {
   const config = await getMarketConfig(env);
   const markets = Object.keys(config);
-  const results = await Promise.all(markets.map(m => updateBingForMarket(env, m)));
+  const sharedMonthData = {};
+  
+  const results = await Promise.all(markets.map(m => updateBingForMarket(env, m, sharedMonthData)));
+  
+  const writeOps = [];
+  const updatedMarkets = new Set();
+  
+  for (const key of Object.keys(sharedMonthData)) {
+    writeOps.push(env.BING_KV.put(key, JSON.stringify(sharedMonthData[key])));
+  }
+  
+  for (const result of results) {
+    if (result.success && result.key && result.message === '更新成功') {
+      updatedMarkets.add(result.market);
+    }
+  }
+  
+  if (updatedMarkets.size > 0) {
+    for (const market of updatedMarkets) {
+      const result = results.find(r => r.market === market);
+      if (result && result.date) {
+        await updateMarketConfigRange(env, market, result.date.substring(0, 6));
+      }
+    }
+    await clearCache(env);
+  }
+  
+  await Promise.all(writeOps);
+  
   return results;
 }
 
