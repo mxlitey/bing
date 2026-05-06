@@ -47,6 +47,7 @@
   let preloadObserver = null;
   let scrollEndTimer = null;
   let scrollPriorityTimer = null;
+  let timelineClickHandler = null;
   const blobUrls = new Set();
 
   function flattenData(data, market = null) {
@@ -283,9 +284,14 @@
       </div>`;
     }).join('');
 
-    $('timelineSidebar').innerHTML = `<div class="timeline-scroll">${html}</div>`;
+    const sidebar = $('timelineSidebar');
+    sidebar.innerHTML = `<div class="timeline-scroll">${html}</div>`;
 
-    $('timelineSidebar').addEventListener('click', (e) => {
+    if (timelineClickHandler) {
+      sidebar.removeEventListener('click', timelineClickHandler);
+    }
+    
+    timelineClickHandler = (e) => {
       const item = e.target.closest('.timeline-item');
       const subItem = e.target.closest('.timeline-sub-item');
       if (subItem) {
@@ -295,7 +301,9 @@
         e.preventDefault();
         toggleYear(item.closest('.timeline-group').dataset.year);
       }
-    });
+    };
+    
+    sidebar.addEventListener('click', timelineClickHandler);
   }
 
   function toggleYear(year) {
@@ -312,6 +320,9 @@
   }
 
   function scrollTimelineToYear(year) {
+    const isMobile = window.innerWidth <= 768;
+    if (!isMobile) return;
+    
     const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
     if (!group) return;
     const scroll = document.querySelector('.timeline-scroll');

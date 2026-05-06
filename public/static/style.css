@@ -176,15 +176,15 @@ body {
   color: var(--accent);
 }
 .market-option .fi {
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 32px;
   border-radius: 3px;
   flex-shrink: 0;
 }
 .market-option .square-flag {
-  width: 24px;
-  height: 24px;
-  border-radius: 3px;
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
 }
 .market-option span:last-child {
   white-space: nowrap;
@@ -230,7 +230,7 @@ body {
   padding-left: 10px;
   border-left: 1px solid var(--border);
 }
-.timeline-group.expanded .timeline-sub { display: flex; }
+.timeline-group.expanded .timeline-sub { display: flex !important; }
 
 .timeline-sub-item {
   display: flex;
