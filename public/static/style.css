@@ -127,9 +127,13 @@ body {
   overflow: hidden;
   padding: 0;
 }
-.market-btn .fi {
+.square-flag {
   width: 32px;
   height: 32px;
+  border-radius: 4px;
+  display: inline-block;
+  overflow: hidden;
+  opacity: 0.9;
 }
 
 .market-dropdown {
@@ -176,6 +180,11 @@ body {
   height: 24px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+.market-option .square-flag {
+  width: 24px;
+  height: 24px;
+  border-radius: 3px;
 }
 .market-option span:last-child {
   white-space: nowrap;

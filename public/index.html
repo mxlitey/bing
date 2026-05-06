@@ -39,7 +39,7 @@
 
   <div class="market-selector" id="marketSelector">
     <button class="market-btn" id="marketBtn" title="切换市场">
-      <span class="fi" id="marketFlag"></span>
+      <span class="fi fis square-flag" id="marketFlag"></span>
     </button>
     <div class="market-dropdown" id="marketDropdown"></div>
   </div>
@@ -47,7 +47,7 @@
     (function(){
       var m=localStorage.getItem('bing_market')||'zh-CN';
       var f={'zh-CN':'cn','en-US':'us','en-GB':'gb','de-DE':'de','fr-FR':'fr','ja-JP':'jp','en-CA':'ca','fr-CA':'ca','en-IN':'in','en-WW':'un','es-ES':'es','it-IT':'it','pt-BR':'br'};
-      document.getElementById('marketFlag').className='fi fi-'+(f[m]||'un');
+      document.getElementById('marketFlag').className='fi fi-'+(f[m]||'un')+' fis square-flag';
     })();
   </script>
 

@@ -27,8 +27,8 @@
     'de-DE': '德国',
     'fr-FR': '法国',
     'ja-JP': '日本',
-    'en-CA': '加拿大',
-    'fr-CA': '加拿大',
+    'en-CA': '加拿大 (英)',
+    'fr-CA': '加拿大 (法)',
     'en-IN': '印度',
     'en-WW': '国际',
     'es-ES': '西班牙',
@@ -175,15 +175,19 @@
     $('heroTitle').innerHTML = formatCopyright(latest.copyright);
 
     const imgUrl = latest.image_url || latest.url;
-    if (!imgUrl) return;
+    if (!imgUrl) {
+      if (loader) loader.classList.add('hidden');
+      return;
+    }
 
     const img = new Image();
     img.onload = () => {
-      hero.style.backgroundImage = `url("${imgUrl.replace(/"/g, '\\"')}")`;
-      loader.classList.add('hidden');
+      const heroUrl = imgUrl.replace('_UHD.jpg', '_1920x1080.jpg');
+      hero.style.backgroundImage = `url("${heroUrl.replace(/"/g, '\\"')}")`;
+      if (loader) loader.classList.add('hidden');
     };
-    img.onerror = () => { loader.classList.add('hidden'); };
-    img.src = imgUrl;
+    img.onerror = () => { if (loader) loader.classList.add('hidden'); };
+    img.src = imgUrl.replace('_UHD.jpg', '_1920x1080.jpg');
   }
 
   function formatCopyright(text) {
@@ -303,7 +307,25 @@
 
     if (!isExpanded) {
       group.classList.add('expanded');
+      scrollTimelineToYear(year);
     }
+  }
+
+  function scrollTimelineToYear(year) {
+    const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
+    if (!group) return;
+    const scroll = document.querySelector('.timeline-scroll');
+    if (!scroll) return;
+    
+    const groupRect = group.getBoundingClientRect();
+    const scrollRect = scroll.getBoundingClientRect();
+    const scrollTop = scroll.scrollTop;
+    const groupTop = groupRect.top - scrollRect.top + scrollTop;
+    const groupHeight = groupRect.height;
+    const scrollHeight = scrollRect.height;
+    
+    const targetScroll = groupTop - (scrollHeight / 2) + (groupHeight / 2);
+    scroll.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
   }
 
   function scrollToElement(elementId, year, month) {
@@ -551,7 +573,7 @@
       const name = MARKET_NAMES[market] || market;
       const activeClass = market === currentMarket ? ' active' : '';
       return `<button class="market-option${activeClass}" data-market="${escapeHtml(market)}">
-        <span class="fi fi-${flagCode}"></span>
+        <span class="fi fi-${flagCode} fis square-flag"></span>
         <span>${escapeHtml(name)}</span>
       </button>`;
     }).join('');
@@ -603,7 +625,7 @@
   function updateMarketButton() {
     const btn = $('marketBtn');
     const flagCode = MARKET_FLAGS[currentMarket] || 'un';
-    btn.innerHTML = `<span class="fi fi-${flagCode}"></span>`;
+    btn.innerHTML = `<span class="fi fi-${flagCode} fis square-flag"></span>`;
     const name = MARKET_NAMES[currentMarket] || currentMarket;
     btn.title = `当前市场: ${name}`;
   }
