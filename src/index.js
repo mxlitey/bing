@@ -205,7 +205,8 @@ async function updateMarketConfigRange(env, market, newYm) {
 
 async function updateBingForMarket(env, market, sharedMonthData) {
   try {
-    const bingApi = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
+    const bingDomain = market === 'zh-CN' ? 'cn.bing.com' : 'www.bing.com';
+    const bingApi = `https://${bingDomain}/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
     const res = await fetch(bingApi);
     if (!res.ok) return { success: false, market, error: 'Bing API 请求失败: ' + res.status };
 
