@@ -448,10 +448,42 @@ async function triggerUpdate() {
   refreshStats();
 }
 
+function groupArrayByDate(items) {
+  const result = {};
+  items.forEach(item => {
+    if (!item?.date || !/^\d{8}$/.test(String(item.date))) return;
+    const year = item.date.slice(0, 4);
+    const ym = item.date.slice(0, 6);
+    const market = item.belong_market || 'unknown';
+    if (!result[year]) result[year] = {};
+    if (!result[year][ym]) result[year][ym] = {};
+    if (!result[year][ym][market]) result[year][ym][market] = [];
+    result[year][ym][market].push({
+      date: item.date,
+      title: item.title || null,
+      copyright: item.copyright || null,
+      image_url: item.image_url || item.url || null,
+      description: item.description || null
+    });
+  });
+  return result;
+}
+
 async function importData(data) {
-  const items = Array.isArray(data) ? data : data?.data || data?.wallpaper_list || [];
-  if (!items.length) return toast('无有效数据', 'error');
-  toast(`导入 ${items.length} 条...`, 'info');
+  let importBody;
+  if (data?.data && typeof data.data === 'object' && !Array.isArray(data.data)) {
+    importBody = data;
+  } else if (Array.isArray(data)) {
+    importBody = { data: groupArrayByDate(data) };
+  } else if (data?.wallpaper_list) {
+    importBody = { data: groupArrayByDate(data.wallpaper_list) };
+  } else {
+    return toast('无有效数据格式', 'error');
+  }
+  
+  const yearCount = Object.keys(importBody.data).length;
+  if (yearCount === 0) return toast('无有效数据', 'error');
+  toast(`导入 ${yearCount} 年数据...`, 'info');
 
   const pb = $('importProgress');
   const fill = pb.querySelector('.progress-fill');
@@ -461,7 +493,7 @@ async function importData(data) {
   const r = await api('/api/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(items)
+    body: JSON.stringify(importBody)
   });
 
   fill.style.width = '100%';
