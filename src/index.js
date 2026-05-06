@@ -356,7 +356,7 @@ async function handleImport(body, env) {
     archiveDataMap[year] = await getArchiveData(env, year);
   }
 
-  let imported = 0, skipped = 0;
+  let imported = 0;
 
   for (const [year, months] of Object.entries(yearMonthMap)) {
     const isArchived = archivedYears.has(year) || year !== currentYear;
@@ -372,18 +372,14 @@ async function handleImport(body, env) {
         for (const [market, newItems] of Object.entries(markets)) {
           if (!Array.isArray(newItems)) continue;
           if (!archiveData[ym][market]) archiveData[ym][market] = [];
-          const dates = new Set(archiveData[ym][market].map(i => i.date));
+          const existingMap = new Map(archiveData[ym][market].map(i => [i.date, i]));
           for (const item of newItems) {
             if (!validateEntry(item)) continue;
-            if (dates.has(item.date)) {
-              skipped++;
-              continue;
-            }
-            archiveData[ym][market].push(cleanItem(item));
+            existingMap.set(item.date, cleanItem(item));
             imported++;
             updateMarketConfigInMemory(marketConfigUpdates, market, ym);
           }
-          archiveData[ym][market].sort((a, b) => a.date.localeCompare(b.date));
+          archiveData[ym][market] = Array.from(existingMap.values()).sort((a, b) => a.date.localeCompare(b.date));
         }
       }
     } else {
@@ -397,18 +393,14 @@ async function handleImport(body, env) {
         for (const [market, newItems] of Object.entries(markets)) {
           if (!Array.isArray(newItems)) continue;
           if (!monthData[market]) monthData[market] = [];
-          const dates = new Set(monthData[market].map(i => i.date));
+          const existingMap = new Map(monthData[market].map(i => [i.date, i]));
           for (const item of newItems) {
             if (!validateEntry(item)) continue;
-            if (dates.has(item.date)) {
-              skipped++;
-              continue;
-            }
-            monthData[market].push(cleanItem(item));
+            existingMap.set(item.date, cleanItem(item));
             imported++;
             updateMarketConfigInMemory(marketConfigUpdates, market, ym);
           }
-          monthData[market].sort((a, b) => a.date.localeCompare(b.date));
+          monthData[market] = Array.from(existingMap.values()).sort((a, b) => a.date.localeCompare(b.date));
         }
       }
     }
@@ -454,7 +446,6 @@ async function handleImport(body, env) {
   return { 
     success: true, 
     imported, 
-    skipped, 
     years: Object.keys(yearMonthMap),
     archivedYears: Object.keys(archiveDataMap),
     newArchivedYears: archivedCount
