@@ -145,8 +145,6 @@ body {
   flex-direction: column;
   gap: 4px;
   min-width: 120px;
-  max-height: 300px;
-  overflow-y: auto;
 }
 .market-dropdown.show {
   display: flex;

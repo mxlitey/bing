@@ -263,8 +263,10 @@
 
   function renderTimeline() {
     const years = Object.keys(groupedData).sort().reverse();
+    
     const html = years.map(year => {
-      const months = Object.keys(groupedData[year]).sort().reverse();
+      const months = Object.keys(groupedData[year] || {}).sort().reverse();
+      if (months.length === 0) return '';
       return `<div class="timeline-group" data-year="${escapeHtml(year)}">
         <a href="#y${escapeHtml(year)}" class="timeline-item">
           <span class="timeline-dot"></span><span>${escapeHtml(year)}</span>
@@ -576,6 +578,10 @@
         opt.classList.toggle('active', opt.dataset.market === market);
       });
       dropdown.classList.remove('show');
+      
+      const loader = $('heroLoader');
+      if (loader) loader.classList.remove('hidden');
+      $('hero').style.backgroundImage = '';
       
       groupData();
       const allData = flattenData(yearData, currentMarket);
