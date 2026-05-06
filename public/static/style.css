@@ -117,9 +117,9 @@ body {
 }
 
 .market-btn {
-  width: 25px;
-  height: 25px;
-  border-radius: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
   border: none;
   background: transparent;
   cursor: pointer;
@@ -131,11 +131,11 @@ body {
 }
 .market-btn .square-flag,
 .market-btn .fi.fis {
-  width: 25px !important;
-  height: 25px !important;
-  min-width: 25px;
-  min-height: 25px;
-  border-radius: 4px;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 2px;
   display: inline-block;
   overflow: hidden;
   opacity: 0.9;
@@ -143,17 +143,17 @@ body {
 
 .market-dropdown {
   position: absolute;
-  bottom: 56px;
+  bottom: 32px;
   right: 0;
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 8px;
+  border-radius: 8px;
+  padding: 4px;
   display: none;
   flex-direction: column;
-  gap: 4px;
-  min-width: 120px;
+  gap: 2px;
+  min-width: 100px;
 }
 .market-dropdown.show {
   display: flex;
@@ -162,15 +162,15 @@ body {
 .market-option {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
-  border-radius: 8px;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
   cursor: pointer;
   transition: background 0.2s;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 13px;
+  font-size: 12px;
   text-align: left;
 }
 .market-option:hover {
@@ -183,11 +183,11 @@ body {
 .market-option .fi,
 .market-option .square-flag,
 .market-option .fi.fis {
-  width: 25px !important;
-  height: 25px !important;
-  min-width: 25px;
-  min-height: 25px;
-  border-radius: 4px;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px;
+  min-height: 16px;
+  border-radius: 2px;
   flex-shrink: 0;
 }
 .market-option span:last-child {
