@@ -4,9 +4,42 @@
   const $ = id => document.getElementById(id);
   const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-  let allData = [];
-  let years = [];
+  const MARKET_FLAGS = {
+    'zh-CN': 'cn',
+    'en-US': 'us',
+    'en-GB': 'gb',
+    'de-DE': 'de',
+    'fr-FR': 'fr',
+    'ja-JP': 'jp',
+    'en-CA': 'ca',
+    'fr-CA': 'ca',
+    'en-IN': 'in',
+    'en-WW': 'un',
+    'es-ES': 'es',
+    'it-IT': 'it',
+    'pt-BR': 'br'
+  };
+
+  const MARKET_NAMES = {
+    'zh-CN': '中国',
+    'en-US': '美国',
+    'en-GB': '英国',
+    'de-DE': '德国',
+    'fr-FR': '法国',
+    'ja-JP': '日本',
+    'en-CA': '加拿大',
+    'fr-CA': '加拿大',
+    'en-IN': '印度',
+    'en-WW': '国际',
+    'es-ES': '西班牙',
+    'it-IT': '意大利',
+    'pt-BR': '巴西'
+  };
+
+  let yearData = {};
+  let marketConfig = {};
   let groupedData = {};
+  let currentMarket = localStorage.getItem('bing_market') || 'zh-CN';
   let isScrollingToTarget = false;
   let currentYear = '';
   let currentMonth = '';
@@ -14,30 +47,58 @@
   let preloadObserver = null;
   let scrollEndTimer = null;
   let scrollPriorityTimer = null;
+  const blobUrls = new Set();
+
+  function flattenData(data, market = null) {
+    const all = [];
+    for (const [year, months] of Object.entries(data)) {
+      for (const [ym, markets] of Object.entries(months)) {
+        for (const [mkt, items] of Object.entries(markets)) {
+          if (Array.isArray(items)) {
+            if (market && mkt !== market) continue;
+            for (const item of items) {
+              all.push({ ...item, belong_market: mkt });
+            }
+          }
+        }
+      }
+    }
+    all.sort((a, b) => b.date.localeCompare(a.date));
+    return all;
+  }
+
+  let allDataFetched = false;
 
   async function loadData() {
-    try {
-      const inlineData = window.__BING_DATA__;
-      if (inlineData) {
-        allData = inlineData.data || inlineData;
-        years = inlineData.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
-        groupData();
-        renderChronicle();
-        renderTimeline();
-        initObservers();
-      }
+    const inlineData = window.__BING_DATA__;
+    if (inlineData?.data) {
+      yearData = inlineData.data;
+      marketConfig = inlineData.marketConfig || {};
+      initMarketSelector();
+      groupData();
+      const allData = flattenData(yearData, currentMarket);
+      if (allData.length) renderHero(allData[0]);
+      renderChronicle();
+      renderTimeline();
+      initObservers();
+      const skeleton = $('skeleton');
+      if (skeleton) skeleton.remove();
+      fetchAllData();
+      return;
+    }
 
+    fetchAllData();
+
+    try {
       const response = await fetch('/json');
       if (!response.ok) throw new Error('请求失败');
       const cached = await response.json();
-      const newData = cached.data || cached;
-      const newYears = cached.years || [...new Set(newData.map(i => i.date.slice(0, 4)))].sort().reverse();
 
-      const hasUpdate = !inlineData || (newData[0] && newData[0].date !== allData[0]?.date);
-
-      if (hasUpdate) {
-        allData = newData;
-        years = newYears;
+      if (!allDataFetched && cached.data) {
+        yearData = cached.data;
+        marketConfig = cached.market_time_config || {};
+        initMarketSelector();
+        const allData = flattenData(yearData, currentMarket);
         if (allData.length) renderHero(allData[0]);
         groupData();
         renderChronicle();
@@ -50,21 +111,54 @@
     } catch (err) {
       const skeleton = $('skeleton');
       if (skeleton) skeleton.remove();
-      if (!allData.length) {
+      if (!Object.keys(yearData).length) {
         const chronicle = $('chronicle');
         chronicle.innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
       }
     }
   }
 
+  async function fetchAllData() {
+    try {
+      const response = await fetch('/json?all=1');
+      if (!response.ok) return;
+      const cached = await response.json();
+      if (cached.data) {
+        allDataFetched = true;
+        yearData = cached.data;
+        marketConfig = cached.market_time_config || {};
+        initMarketSelector();
+        const allData = flattenData(yearData, currentMarket);
+        if (allData.length) renderHero(allData[0]);
+        groupData();
+        renderChronicle();
+        renderTimeline();
+        initObservers();
+      }
+    } catch (e) {
+      console.error('Failed to fetch all data:', e);
+    }
+  }
+
   function groupData() {
     groupedData = {};
-    allData.forEach(item => {
-      const y = item.date.slice(0, 4);
-      const m = item.date.slice(0, 6);
-      (groupedData[y] ??= {})[m] ??= [];
-      groupedData[y][m].push(item);
-    });
+    for (const [year, months] of Object.entries(yearData)) {
+      for (const [ym, markets] of Object.entries(months)) {
+        for (const [market, items] of Object.entries(markets)) {
+          if (!Array.isArray(items)) continue;
+          if (market !== currentMarket) continue;
+          const y = ym.slice(0, 4);
+          if (!groupedData[y]) groupedData[y] = {};
+          if (!groupedData[y][ym]) groupedData[y][ym] = [];
+          groupedData[y][ym].push(...items.map(item => ({ ...item, belong_market: market })));
+        }
+      }
+    }
+    for (const y of Object.keys(groupedData)) {
+      for (const m of Object.keys(groupedData[y])) {
+        groupedData[y][m].sort((a, b) => b.date.localeCompare(a.date));
+      }
+    }
   }
 
   function escapeHtml(str) {
@@ -80,13 +174,16 @@
     $('heroDate').textContent = `${latest.date.slice(0,4)}-${latest.date.slice(4,6)}-${latest.date.slice(6,8)}`;
     $('heroTitle').innerHTML = formatCopyright(latest.copyright);
 
+    const imgUrl = latest.image_url || latest.url;
+    if (!imgUrl) return;
+
     const img = new Image();
     img.onload = () => {
-      hero.style.backgroundImage = `url("${latest.url.replace(/"/g, '\\"')}")`;
+      hero.style.backgroundImage = `url("${imgUrl.replace(/"/g, '\\"')}")`;
       loader.classList.add('hidden');
     };
     img.onerror = () => { loader.classList.add('hidden'); };
-    img.src = latest.url;
+    img.src = imgUrl;
   }
 
   function formatCopyright(text) {
@@ -96,7 +193,8 @@
   }
 
   function renderChronicle() {
-    if (!allData.length) {
+    const years = Object.keys(groupedData).sort().reverse();
+    if (!years.length) {
       $('chronicle').innerHTML = '<div class="loading-error">暂无壁纸数据</div>';
       return;
     }
@@ -104,7 +202,7 @@
     const chronicle = $('chronicle');
     chronicle.innerHTML = '';
 
-    years.filter(y => groupedData[y]).forEach(year => {
+    years.forEach(year => {
       const months = Object.keys(groupedData[year]).sort().reverse();
       const count = months.reduce((sum, m) => sum + groupedData[year][m].length, 0);
 
@@ -133,12 +231,17 @@
         items.forEach(item => {
           const thumbItem = document.createElement('div');
           thumbItem.className = 'thumb-item';
-          thumbItem.onclick = () => window.open(item.url, '_blank', 'noopener');
+          const imgUrl = item.image_url || item.url;
+          thumbItem.onclick = () => {
+            if (imgUrl) window.open(imgUrl, '_blank', 'noopener');
+          };
 
           const img = document.createElement('img');
           img.className = 'lazy-img';
-          img.dataset.src = item.url.replace('_UHD.jpg','_800x480.jpg');
-          img.dataset.fallback = item.url;
+          if (imgUrl) {
+            img.dataset.src = imgUrl.replace('_UHD.jpg','_800x480.jpg');
+            img.dataset.fallback = imgUrl;
+          }
           img.alt = item.copyright || '';
 
           const dateDiv = document.createElement('div');
@@ -159,7 +262,8 @@
   }
 
   function renderTimeline() {
-    const html = years.filter(y => groupedData[y]).map(year => {
+    const years = Object.keys(groupedData).sort().reverse();
+    const html = years.map(year => {
       const months = Object.keys(groupedData[year]).sort().reverse();
       return `<div class="timeline-group" data-year="${escapeHtml(year)}">
         <a href="#y${escapeHtml(year)}" class="timeline-item">
@@ -431,6 +535,71 @@
   function cleanup() {
     blobUrls.forEach(url => URL.revokeObjectURL(url));
     blobUrls.clear();
+  }
+
+  function initMarketSelector() {
+    const dropdown = $('marketDropdown');
+    const btn = $('marketBtn');
+    
+    const markets = Object.keys(marketConfig);
+    if (!markets.length) return;
+
+    dropdown.innerHTML = markets.map(market => {
+      const flagCode = MARKET_FLAGS[market] || 'un';
+      const name = MARKET_NAMES[market] || market;
+      const activeClass = market === currentMarket ? ' active' : '';
+      return `<button class="market-option${activeClass}" data-market="${escapeHtml(market)}">
+        <span class="fi fi-${flagCode}"></span>
+        <span>${escapeHtml(name)}</span>
+      </button>`;
+    }).join('');
+
+    btn.onclick = (e) => {
+      e.stopPropagation();
+      dropdown.classList.toggle('show');
+    };
+
+    dropdown.onclick = (e) => {
+      const option = e.target.closest('.market-option');
+      if (!option) return;
+      const market = option.dataset.market;
+      if (market === currentMarket) {
+        dropdown.classList.remove('show');
+        return;
+      }
+      
+      currentMarket = market;
+      localStorage.setItem('bing_market', market);
+      
+      updateMarketButton();
+      dropdown.querySelectorAll('.market-option').forEach(opt => {
+        opt.classList.toggle('active', opt.dataset.market === market);
+      });
+      dropdown.classList.remove('show');
+      
+      groupData();
+      const allData = flattenData(yearData, currentMarket);
+      if (allData.length) renderHero(allData[0]);
+      renderChronicle();
+      renderTimeline();
+      initObservers();
+      
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    };
+
+    document.addEventListener('click', () => {
+      dropdown.classList.remove('show');
+    });
+    
+    updateMarketButton();
+  }
+
+  function updateMarketButton() {
+    const btn = $('marketBtn');
+    const flagCode = MARKET_FLAGS[currentMarket] || 'un';
+    btn.innerHTML = `<span class="fi fi-${flagCode}"></span>`;
+    const name = MARKET_NAMES[currentMarket] || currentMarket;
+    btn.title = `当前市场: ${name}`;
   }
 
   window.addEventListener('beforeunload', cleanup);

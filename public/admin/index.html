@@ -46,7 +46,7 @@
           </button>
         </div>
       </div>
-      <p class="tagline">每日自动更新 · 数据按月存储</p>
+      <p class="tagline">多市场支持 · 自动归档 · 按月存储</p>
     </div>
   </header>
 
@@ -98,13 +98,79 @@
               </svg>
             </div>
             <p class="drop-text">拖拽 JSON 文件到此处</p>
-            <p class="drop-hint">或点击选择文件</p>
+            <p class="drop-hint">或点击选择文件（需要符合导入格式）</p>
             <input type="file" id="fileInput" accept=".json" hidden>
           </div>
           <div class="progress-track" id="importProgress">
             <div class="progress-fill"></div>
           </div>
           <div class="import-result" id="importResult"></div>
+          <div class="format-help">
+            <details>
+              <summary>数据格式说明 &amp; AI转换提示词</summary>
+              <div class="format-content">
+                <h4>导入格式示例</h4>
+                <pre class="format-code">{
+  "data": {
+    "2024": {
+      "202401": {
+        "zh-CN": [
+          { "date": "20240101", "title": "...", "copyright": "...", "image_url": "...", "description": "..." }
+        ],
+        "en-US": [...]
+      },
+      "202402": {...}
+    }
+  }
+}</pre>
+                <h4>字段说明</h4>
+                <ul>
+                  <li><code>data</code> - 根字段</li>
+                  <li><code>年份</code> - 4位数字，如 2024</li>
+                  <li><code>月份</code> - 6位数字，如 202401</li>
+                  <li><code>市场</code> - 市场代码，如 zh-CN、en-US</li>
+                  <li><code>date</code> - 8位日期，如 20240101（必需）</li>
+                  <li><code>title</code> - 标题（可选）</li>
+                  <li><code>copyright</code> - 版权信息（可选）</li>
+                  <li><code>image_url</code> - 图片URL（可选）</li>
+                  <li><code>description</code> - 描述（可选）</li>
+                </ul>
+                <h4>AI转换提示词</h4>
+                <p>复制以下提示词，让AI帮你转换数据格式：</p>
+                <pre class="format-prompt" id="convertPrompt">请将以下Bing壁纸数据转换为指定的导入格式。
+
+目标格式：
+{
+  "data": {
+    "年份(YYYY)": {
+      "月份(YYYYMM)": {
+        "市场代码(如zh-CN)": [
+          {
+            "date": "日期(YYYYMMDD)",
+            "title": "标题",
+            "copyright": "版权信息",
+            "image_url": "图片URL",
+            "description": "描述"
+          }
+        ]
+      }
+    }
+  }
+}
+
+要求：
+1. 按年份分组，键名为4位年份
+2. 每年下按月份分组，键名为6位年月(YYYYMM)
+3. 每月下按市场分组，键名为市场代码(如zh-CN、en-US)
+4. 每条数据必须包含date字段(8位日期YYYYMMDD)
+5. 其他字段可选：title、copyright、image_url、description
+
+原始数据：
+[粘贴你的原始数据]</pre>
+                <button class="btn btn-outline btn-sm" id="copyPromptBtn">复制提示词</button>
+              </div>
+            </details>
+          </div>
         </div>
       </div>
 
@@ -125,6 +191,9 @@
               <input type="text" id="exportStart" placeholder="起始月份 202102" pattern="\d{6}" maxlength="6">
               <span class="separator">—</span>
               <input type="text" id="exportEnd" placeholder="结束月份 202605" pattern="\d{6}" maxlength="6">
+            </div>
+            <div class="input-row">
+              <input type="text" id="exportMarket" placeholder="市场筛选（可选）zh-CN">
             </div>
             <div class="btn-group">
               <button class="btn btn-outline" id="exportPreviewBtn">预览</button>
@@ -154,7 +223,7 @@
                   <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
                 </svg>
               </div>
-              <span>手动更新</span>
+              <span>更新所有市场</span>
             </button>
             <button class="action-btn" id="refreshBtn">
               <div class="action-icon">
@@ -165,6 +234,46 @@
               <span>刷新统计</span>
             </button>
           </div>
+        </div>
+      </div>
+
+      <div class="card glass">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon red">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8"/>
+                <path d="M10 12v4M14 12v4"/>
+              </svg>
+            </div>
+            <h3>年度归档</h3>
+          </div>
+        </div>
+        <div class="card-body">
+          <div class="archive-form">
+            <div class="input-row">
+              <input type="text" id="archiveYear" placeholder="年份 2024" pattern="\d{4}" maxlength="4">
+              <button class="btn btn-outline" id="archiveBtn">执行归档</button>
+            </div>
+            <p class="archive-hint">归档后将删除原月份数据，数据保存到年度归档中</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="card glass">
+        <div class="card-header">
+          <div class="card-title">
+            <div class="card-icon green">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+              </svg>
+            </div>
+            <h3>市场列表</h3>
+          </div>
+        </div>
+        <div class="card-body no-padding">
+          <div class="market-table" id="marketTable"></div>
         </div>
       </div>
 

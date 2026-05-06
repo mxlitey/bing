@@ -128,33 +128,51 @@ async function checkLogin() {
   }
 }
 
-let allData = [];
-let yearsList = [];
+let yearData = {};
+let marketConfig = {};
+
+function flattenData(data) {
+  const all = [];
+  for (const [year, months] of Object.entries(data)) {
+    for (const [ym, markets] of Object.entries(months)) {
+      for (const [market, items] of Object.entries(markets)) {
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            all.push({ ...item, belong_market: market });
+          }
+        }
+      }
+    }
+  }
+  return all;
+}
 
 async function refreshStats() {
-  const cached = await api('/json');
+  const cached = await api('/json?all=1');
   if (!cached || cached.error) {
     if (cached?.error === '需要认证') return;
     return;
   }
 
-  allData = cached.data || cached;
-  yearsList = cached.years || [...new Set(allData.map(i => i.date.slice(0, 4)))].sort().reverse();
+  yearData = cached.data || {};
+  marketConfig = cached.market_time_config || {};
 
-  const monthMap = {};
-  allData.forEach(item => {
-    const month = item.date.slice(0, 6);
-    monthMap[month] = (monthMap[month] || 0) + 1;
-  });
+  const markets = Object.keys(marketConfig).sort();
+  const allData = flattenData(yearData);
 
-  const monthsArr = Object.entries(monthMap)
-    .map(([month, count]) => ({ month, count }))
-    .sort((a, b) => b.month.localeCompare(a.month));
+  let monthCount = 0;
+  for (const [year, months] of Object.entries(yearData)) {
+    monthCount += Object.keys(months).length;
+  }
 
-  const monthCount = monthsArr.length;
   const total = allData.length;
+  const marketCount = markets.length;
 
   $('statsArea').innerHTML = `
+    <div class="stat-card">
+      <div class="stat-value">${escapeHtml(String(marketCount))}</div>
+      <div class="stat-label">市场数</div>
+    </div>
     <div class="stat-card">
       <div class="stat-value">${escapeHtml(String(monthCount))}</div>
       <div class="stat-label">月份数</div>
@@ -165,96 +183,139 @@ async function refreshStats() {
     </div>
   `;
 
+  renderMarketConfig(markets, allData);
+  renderMonthTree(allData);
+}
+
+function renderMarketConfig(markets, allData) {
+  const container = $('marketTable');
+  container.innerHTML = '';
+
+  markets.forEach(market => {
+    const config = marketConfig[market] || { start_ym: '-', end_ym: '-' };
+    const count = allData.filter(i => i.belong_market === market).length;
+    const el = document.createElement('div');
+    el.className = 'market-row';
+    el.innerHTML = `
+      <span class="market-code">${escapeHtml(market)}</span>
+      <span class="market-range">${escapeHtml(config.start_ym)} ~ ${escapeHtml(config.end_ym)}</span>
+      <span class="market-count">${escapeHtml(String(count))} 条</span>
+      <span class="tree-delete" data-market="${escapeHtml(market)}">删除</span>
+    `;
+    container.appendChild(el);
+  });
+
+  container.querySelectorAll('.tree-delete').forEach(el => {
+    el.addEventListener('click', handleDeleteClick);
+  });
+}
+
+function renderMonthTree(allData) {
   const tree = {};
-  monthsArr.forEach(m => {
-    const year = m.month.slice(0, 4);
-    const month = m.month.slice(4, 6);
-    if (!tree[year]) tree[year] = { count: 0, months: [] };
-    tree[year].count += m.count;
-    tree[year].months.push({ month, count: m.count, full: m.month });
+  allData.forEach(item => {
+    const market = item.belong_market || 'unknown';
+    const year = item.date.slice(0, 4);
+    const month = item.date.slice(4, 6);
+    if (!tree[market]) tree[market] = { count: 0, years: {} };
+    tree[market].count++;
+    if (!tree[market].years[year]) tree[market].years[year] = { count: 0, months: {} };
+    tree[market].years[year].count++;
+    if (!tree[market].years[year].months[month]) tree[market].years[year].months[month] = [];
+    tree[market].years[year].months[month].push(item);
   });
 
   const container = $('monthTable');
   container.innerHTML = '';
 
-  Object.keys(tree).sort((a, b) => b.localeCompare(a)).forEach(year => {
-    const yearData = tree[year];
-    const yearEl = document.createElement('div');
-    yearEl.className = 'tree-year';
-    yearEl.innerHTML = `
+  Object.keys(tree).sort().forEach(market => {
+    const marketData = tree[market];
+    const marketEl = document.createElement('div');
+    marketEl.className = 'tree-market';
+    marketEl.innerHTML = `
       <div class="tree-header">
         <div class="tree-toggle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
         </div>
-        <span class="tree-label">${escapeHtml(year)} 年</span>
-        <span class="tree-count">${escapeHtml(String(yearData.count))} 张</span>
-        <span class="tree-delete" data-year="${escapeHtml(year)}">删除</span>
+        <span class="tree-label">${escapeHtml(market)}</span>
+        <span class="tree-count">${escapeHtml(String(marketData.count))} 张</span>
+        <span class="tree-delete" data-market="${escapeHtml(market)}">删除</span>
       </div>
       <div class="tree-children"></div>
     `;
 
-    const childrenEl = yearEl.querySelector('.tree-children');
-    yearData.months.sort((a, b) => b.month.localeCompare(a.month)).forEach(m => {
-      const monthEl = document.createElement('div');
-      monthEl.className = 'tree-month';
-      monthEl.innerHTML = `
+    const marketChildrenEl = marketEl.querySelector('.tree-children');
+
+    Object.keys(marketData.years).sort((a, b) => b.localeCompare(a)).forEach(year => {
+      const yearData = marketData.years[year];
+      const yearEl = document.createElement('div');
+      yearEl.className = 'tree-year';
+      yearEl.innerHTML = `
         <div class="tree-header">
           <div class="tree-toggle">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
           </div>
-          <span class="tree-label">${escapeHtml(m.month)} 月</span>
-          <span class="tree-count">${escapeHtml(String(m.count))} 张</span>
-          <span class="tree-delete" data-month="${escapeHtml(m.full)}">删除</span>
+          <span class="tree-label">${escapeHtml(year)} 年</span>
+          <span class="tree-count">${escapeHtml(String(yearData.count))} 张</span>
         </div>
         <div class="tree-children"></div>
       `;
 
-      childrenEl.appendChild(monthEl);
-    });
+      const yearChildrenEl = yearEl.querySelector('.tree-children');
 
-    container.appendChild(yearEl);
-  });
-
-  container.querySelectorAll('.tree-year > .tree-header').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.tree-delete')) return;
-      el.parentElement.classList.toggle('expanded');
-    });
-  });
-
-  container.querySelectorAll('.tree-month > .tree-header').forEach(el => {
-    el.addEventListener('click', async (e) => {
-      if (e.target.closest('.tree-delete')) return;
-      const monthEl = el.parentElement;
-      if (monthEl.classList.contains('loaded')) {
-        monthEl.classList.toggle('expanded');
-        return;
-      }
-
-      const monthKey = el.querySelector('.tree-delete').dataset.month;
-      const data = allData.filter(item => item.date.startsWith(monthKey));
-      if (!data.length) return;
-
-      const childrenEl = monthEl.querySelector('.tree-children');
-      childrenEl.innerHTML = '';
-
-      data.forEach(item => {
-        const dayEl = document.createElement('div');
-        dayEl.className = 'tree-day';
-        dayEl.innerHTML = `
-          <span class="tree-label">${escapeHtml(item.date.slice(6, 8))} 日</span>
-          <span class="tree-desc">${escapeHtml(item.copyright || '')}</span>
-          <span class="tree-delete" data-date="${escapeHtml(item.date)}">删除</span>
+      Object.keys(yearData.months).sort((a, b) => b.localeCompare(a)).forEach(month => {
+        const monthItems = yearData.months[month];
+        const monthEl = document.createElement('div');
+        monthEl.className = 'tree-month';
+        monthEl.innerHTML = `
+          <div class="tree-header">
+            <div class="tree-toggle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
+            </div>
+            <span class="tree-label">${escapeHtml(month)} 月</span>
+            <span class="tree-count">${escapeHtml(String(monthItems.length))} 张</span>
+            <span class="tree-delete" data-month="${escapeHtml(year + month)}" data-market="${escapeHtml(market)}">删除</span>
+          </div>
+          <div class="tree-children"></div>
         `;
-        childrenEl.appendChild(dayEl);
+
+        const monthChildrenEl = monthEl.querySelector('.tree-children');
+        monthItems.sort((a, b) => a.date.localeCompare(b.date)).forEach(item => {
+          const dayEl = document.createElement('div');
+          dayEl.className = 'tree-day';
+          dayEl.innerHTML = `
+            <span class="tree-label">${escapeHtml(item.date.slice(6, 8))} 日</span>
+            <span class="tree-desc">${escapeHtml(item.copyright || item.title || '')}</span>
+            <span class="tree-delete" data-date="${escapeHtml(item.date)}" data-market="${escapeHtml(market)}">删除</span>
+          `;
+          monthChildrenEl.appendChild(dayEl);
+        });
+
+        monthChildrenEl.querySelectorAll('.tree-delete').forEach(delBtn => {
+          delBtn.addEventListener('click', handleDeleteClick);
+        });
+
+        monthEl.querySelector('.tree-header').addEventListener('click', (e) => {
+          if (e.target.closest('.tree-delete')) return;
+          monthEl.classList.toggle('expanded');
+        });
+
+        yearChildrenEl.appendChild(monthEl);
       });
 
-      childrenEl.querySelectorAll('.tree-delete').forEach(delBtn => {
-        delBtn.addEventListener('click', handleDeleteClick);
+      yearEl.querySelector('.tree-header').addEventListener('click', (e) => {
+        if (e.target.closest('.tree-delete')) return;
+        yearEl.classList.toggle('expanded');
       });
 
-      monthEl.classList.add('loaded', 'expanded');
+      marketChildrenEl.appendChild(yearEl);
     });
+
+    marketEl.querySelector('.tree-header').addEventListener('click', (e) => {
+      if (e.target.closest('.tree-delete')) return;
+      marketEl.classList.toggle('expanded');
+    });
+
+    container.appendChild(marketEl);
   });
 
   container.querySelectorAll('.tree-delete').forEach(el => {
@@ -268,6 +329,9 @@ async function handleDeleteClick(e) {
   const year = el.dataset.year;
   const month = el.dataset.month;
   const date = el.dataset.date;
+  const market = el.dataset.market;
+
+  const allData = flattenData(yearData);
 
   let title = '';
   let details = [];
@@ -284,25 +348,33 @@ async function handleDeleteClick(e) {
     ];
     body = { year };
   } else if (month) {
-    const monthData = allData.filter(item => item.date.startsWith(month));
+    const monthDataItems = allData.filter(item => item.date.startsWith(month));
     const year = month.slice(0, 4);
     const monthNum = month.slice(4, 6);
     title = `删除 ${year} 年 ${monthNum} 月数据`;
     details = [
-      `共 ${monthData.length} 条记录`,
-      `日期范围: ${monthData[monthData.length - 1]?.date || ''} ~ ${monthData[0]?.date || ''}`
+      `共 ${monthDataItems.length} 条记录`,
+      `日期范围: ${monthDataItems[monthDataItems.length - 1]?.date || ''} ~ ${monthDataItems[0]?.date || ''}`
     ];
-    body = { month };
-  } else if (date) {
-    const item = allData.find(i => i.date === date);
+    body = { month, market };
+  } else if (date && market) {
+    const item = allData.find(i => i.date === date && i.belong_market === market);
     const year = date.slice(0, 4);
     const month = date.slice(4, 6);
     const day = date.slice(6, 8);
     title = `删除 ${year} 年 ${month} 月 ${day} 日数据`;
     details = [
+      `市场: ${market}`,
       `版权信息: ${item?.copyright || '无'}`
     ];
-    body = { date };
+    body = { date, market };
+  } else if (market) {
+    const marketDataItems = allData.filter(i => i.belong_market === market);
+    title = `删除市场 ${market} 数据`;
+    details = [
+      `共 ${marketDataItems.length} 条记录`
+    ];
+    body = { market };
   }
 
   if (!await showConfirmDialog(title, details)) return;
@@ -361,16 +433,25 @@ function showConfirmDialog(title, details) {
 }
 
 async function triggerUpdate() {
-  toast('正在更新...', 'info');
-  const r = await api('/update');
-  if (r?.error === '需要认证') return;
-  r?.success ? toast(`${r.message} (${r.date})`, 'success') : toast(`失败: ${r?.error}`, 'error');
+  toast('正在更新所有市场...', 'info');
+  const results = await api('/update');
+  if (results?.error === '需要认证') return;
+
+  if (Array.isArray(results)) {
+    const success = results.filter(r => r.success).length;
+    const failed = results.filter(r => !r.success).length;
+    const skipped = results.filter(r => r.message === '已存在').length;
+    toast(`更新完成: 成功 ${success}, 已存在 ${skipped}, 失败 ${failed}`, failed > 0 ? 'error' : 'success');
+  } else if (results?.error) {
+    toast(`失败: ${results.error}`, 'error');
+  }
   refreshStats();
 }
 
 async function importData(data) {
-  if (!Array.isArray(data)) return toast('格式错误', 'error');
-  toast(`导入 ${data.length} 条...`, 'info');
+  const items = Array.isArray(data) ? data : data?.data || data?.wallpaper_list || [];
+  if (!items.length) return toast('无有效数据', 'error');
+  toast(`导入 ${items.length} 条...`, 'info');
 
   const pb = $('importProgress');
   const fill = pb.querySelector('.progress-fill');
@@ -380,7 +461,7 @@ async function importData(data) {
   const r = await api('/api/import', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    body: JSON.stringify(items)
   });
 
   fill.style.width = '100%';
@@ -401,44 +482,88 @@ async function importData(data) {
 }
 
 async function exportData(download = false) {
-  if (!allData.length) {
+  if (!yearData || Object.keys(yearData).length === 0) {
     toast('暂无数据', 'error');
     return;
   }
 
   const start = $('exportStart').value.trim().replace(/-/g, '');
   const end = $('exportEnd').value.trim().replace(/-/g, '');
+  const market = $('exportMarket').value.trim();
 
-  let filtered = allData;
-  if (start) {
-    filtered = filtered.filter(item => item.date.slice(0, 6) >= start);
-  }
-  if (end) {
-    filtered = filtered.filter(item => item.date.slice(0, 6) <= end);
+  const filteredYearData = {};
+  for (const [year, months] of Object.entries(yearData)) {
+    for (const [ym, markets] of Object.entries(months)) {
+      if (start && ym < start) continue;
+      if (end && ym > end) continue;
+
+      const filteredMarkets = {};
+      for (const [mkt, items] of Object.entries(markets)) {
+        if (market && mkt !== market) continue;
+        if (!filteredYearData[year]) filteredYearData[year] = {};
+        filteredMarkets[mkt] = items;
+      }
+      if (Object.keys(filteredMarkets).length > 0) {
+        filteredYearData[year][ym] = filteredMarkets;
+      }
+    }
   }
 
-  if (!filtered.length) {
+  if (Object.keys(filteredYearData).length === 0) {
     toast('无匹配数据', 'error');
     return;
   }
 
-  filtered.sort((a, b) => a.date.localeCompare(b.date));
+  const exportResult = {
+    data: filteredYearData,
+    market_time_config: marketConfig
+  };
 
   if (download) {
-    const json = JSON.stringify(filtered, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+    const jsonStr = JSON.stringify(exportResult, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = 'bing_wallpapers.json';
     a.click();
     URL.revokeObjectURL(url);
-    toast(`导出 ${filtered.length} 条数据`, 'success');
+    const total = Object.values(filteredYearData).reduce((sum, months) => 
+      sum + Object.values(months).reduce((s, markets) => 
+        s + Object.values(markets).reduce((c, items) => c + items.length, 0), 0), 0);
+    toast(`导出 ${total} 条数据`, 'success');
   } else {
-    const json = JSON.stringify(filtered, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
+    const jsonStr = JSON.stringify(exportResult, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     window.open(url, '_blank', 'noopener');
+  }
+}
+
+async function triggerArchive() {
+  const year = $('archiveYear').value.trim();
+  if (!year || !/^\d{4}$/.test(year)) {
+    toast('请输入有效的年份', 'error');
+    return;
+  }
+
+  if (!await showConfirmDialog(`归档 ${year} 年数据`, [
+    '归档后将删除原月份数据',
+    '数据将保存到年度归档中'
+  ])) return;
+
+  toast(`正在归档 ${year} 年数据...`, 'info');
+  const r = await api('/api/archive', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year })
+  });
+
+  if (r?.success) {
+    toast(r.message, 'success');
+    refreshStats();
+  } else if (r?.error) {
+    toast(r.error, 'error');
   }
 }
 
@@ -467,6 +592,19 @@ document.addEventListener('DOMContentLoaded', () => {
   $('exportDownloadBtn').addEventListener('click', () => exportData(true));
   $('updateBtn').addEventListener('click', triggerUpdate);
   $('refreshBtn').addEventListener('click', refreshStats);
+  $('archiveBtn').addEventListener('click', triggerArchive);
+
+  const copyPromptBtn = $('copyPromptBtn');
+  if (copyPromptBtn) {
+    copyPromptBtn.addEventListener('click', () => {
+      const prompt = $('convertPrompt').textContent;
+      navigator.clipboard.writeText(prompt).then(() => {
+        toast('提示词已复制', 'success');
+      }).catch(() => {
+        toast('复制失败', 'error');
+      });
+    });
+  }
 
   const drop = $('dropZone');
   const input = $('fileInput');

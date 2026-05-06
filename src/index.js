@@ -1,5 +1,11 @@
-const DEFAULT_BING_API = 'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN';
+const DEFAULT_MARKETS = [
+  'zh-CN', 'en-US', 'en-GB', 'de-DE', 'fr-FR', 'ja-JP',
+  'en-CA', 'fr-CA', 'en-IN', 'en-WW', 'es-ES', 'it-IT', 'pt-BR'
+];
+
 const PREFIX = 'bing_';
+const ARCHIVE_PREFIX = 'archive_';
+const MARKET_CONFIG_KEY = 'market_time_config';
 const CACHE_KEY = 'cache_all_data';
 const CACHE_TTL = 86400;
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
@@ -16,45 +22,87 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 });
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
-const getMonthData = async (env, key) => await env.BING_KV.get(key, 'json') || [];
-const getAllKeys = async (env) => (await env.BING_KV.list({ prefix: PREFIX })).keys.map(k => k.name).filter(k => !k.startsWith('cache_')).sort().reverse();
+const getArchiveKey = (year) => ARCHIVE_PREFIX + year;
+const getYearFromKey = (key) => key.replace(PREFIX, '').substring(0, 4);
 
-function filterFields(data, fields) {
-  if (!fields) return data;
-  const fieldList = fields.split(',').map(f => f.trim()).filter(Boolean);
-  if (!fieldList.length) return data;
-
-  if (Array.isArray(data)) {
-    return data.map(item => {
-      const filtered = {};
-      for (const f of fieldList) if (item[f] !== undefined) filtered[f] = item[f];
-      return filtered;
-    });
+async function getMarketConfig(env) {
+  const config = await env.BING_KV.get(MARKET_CONFIG_KEY, 'json');
+  if (config) return config;
+  const defaultConfig = {};
+  const currentYm = getCurrentYm();
+  for (const market of DEFAULT_MARKETS) {
+    defaultConfig[market] = { start_ym: currentYm, end_ym: currentYm };
   }
+  await env.BING_KV.put(MARKET_CONFIG_KEY, JSON.stringify(defaultConfig));
+  return defaultConfig;
+}
 
-  const filtered = {};
-  for (const f of fieldList) if (data[f] !== undefined) filtered[f] = data[f];
-  return filtered;
+async function saveMarketConfig(env, config) {
+  await env.BING_KV.put(MARKET_CONFIG_KEY, JSON.stringify(config));
+}
+
+function getCurrentYm() {
+  const now = new Date();
+  return now.getFullYear().toString() + String(now.getMonth() + 1).padStart(2, '0');
+}
+
+async function getMonthData(env, key) {
+  return await env.BING_KV.get(key, 'json') || {};
+}
+
+async function saveMonthData(env, key, data) {
+  await env.BING_KV.put(key, JSON.stringify(data));
+  await clearCache(env);
+}
+
+async function getArchiveData(env, year) {
+  return await env.BING_KV.get(getArchiveKey(year), 'json') || {};
+}
+
+async function saveArchiveData(env, year, data) {
+  await env.BING_KV.put(getArchiveKey(year), JSON.stringify(data));
+}
+
+async function getAllMonthKeys(env) {
+  const list = await env.BING_KV.list({ prefix: PREFIX });
+  return list.keys.map(k => k.name).sort().reverse();
+}
+
+async function getAllArchiveKeys(env) {
+  const list = await env.BING_KV.list({ prefix: ARCHIVE_PREFIX });
+  return list.keys.map(k => k.name).sort().reverse();
 }
 
 async function buildCache(env) {
-  const keys = await getAllKeys(env);
-  const results = await Promise.all(keys.map(k => env.BING_KV.get(k, 'json')));
+  const monthKeys = await getAllMonthKeys(env);
+  const archiveKeys = await getAllArchiveKeys(env);
+  const marketConfig = await getMarketConfig(env);
 
-  const all = [];
-  const years = new Set();
+  const data = {};
 
-  for (const d of results) {
-    if (d) {
-      all.push(...d);
-      if (d[0]) years.add(d[0].date.substring(0, 4));
+  for (const key of monthKeys) {
+    const monthData = await env.BING_KV.get(key, 'json');
+    if (monthData && Object.keys(monthData).length > 0) {
+      const ym = key.replace(PREFIX, '');
+      const year = ym.substring(0, 4);
+      if (!data[year]) data[year] = {};
+      data[year][ym] = monthData;
     }
   }
 
-  all.sort((a, b) => b.date.localeCompare(a.date));
-  const yearsArr = Array.from(years).sort().reverse();
+  for (const key of archiveKeys) {
+    const archiveData = await env.BING_KV.get(key, 'json');
+    if (archiveData && Object.keys(archiveData).length > 0) {
+      const year = key.replace(ARCHIVE_PREFIX, '');
+      if (!data[year]) data[year] = {};
+      Object.assign(data[year], archiveData);
+    }
+  }
 
-  const cacheData = { data: all, years: yearsArr };
+  const cacheData = {
+    data,
+    marketConfig
+  };
   await env.BING_KV.put(CACHE_KEY, JSON.stringify(cacheData), { expirationTtl: CACHE_TTL });
 
   return cacheData;
@@ -72,19 +120,58 @@ function formatCopyright(str) {
 
 async function getAllData(env) {
   const cached = await env.BING_KV.get(CACHE_KEY, 'json');
-  if (cached?.data?.years) return cached;
+  if (cached?.data) return cached;
   return buildCache(env);
+}
+
+async function getRecentData(env, monthCount = 2) {
+  const recentMonths = getRecentMonths(monthCount);
+  const marketConfig = await getMarketConfig(env);
+  const data = {};
+
+  for (const ym of recentMonths) {
+    const key = PREFIX + ym;
+    const monthData = await env.BING_KV.get(key, 'json');
+    if (monthData && Object.keys(monthData).length > 0) {
+      const year = ym.substring(0, 4);
+      if (!data[year]) data[year] = {};
+      data[year][ym] = monthData;
+    }
+  }
+
+  return {
+    data,
+    market_time_config: marketConfig
+  };
+}
+
+function flattenData(data) {
+  const all = [];
+  for (const [year, months] of Object.entries(data)) {
+    for (const [ym, markets] of Object.entries(months)) {
+      for (const [market, items] of Object.entries(markets)) {
+        if (Array.isArray(items)) {
+          for (const item of items) {
+            all.push({ ...item, belong_market: market });
+          }
+        }
+      }
+    }
+  }
+  all.sort((a, b) => b.date.localeCompare(a.date));
+  return all;
 }
 
 async function injectHeroData(env, html) {
   const cached = await getAllData(env);
-  const latest = cached.data?.[0];
+  const allData = flattenData(cached.data);
+  const latest = allData[0];
   if (!latest) return html;
 
   const dateFormatted = `${latest.date.slice(0, 4)}-${latest.date.slice(4, 6)}-${latest.date.slice(6, 8)}`;
 
   try {
-    const imgUrl = new URL(latest.url);
+    const imgUrl = new URL(latest.url || latest.image_url);
     const preconnect = `<link rel="preconnect" href="${imgUrl.origin}">`;
     html = html.replace('</head>', preconnect + '</head>');
   } catch {}
@@ -101,80 +188,290 @@ async function clearCache(env) {
   await env.BING_KV.delete(CACHE_KEY);
 }
 
-async function saveMonthData(env, key, data) {
-  await env.BING_KV.put(key, JSON.stringify(data));
-  await clearCache(env);
+async function updateMarketConfigRange(env, market, newYm) {
+  const config = await getMarketConfig(env);
+  if (!config[market]) {
+    config[market] = { start_ym: newYm, end_ym: newYm };
+  } else {
+    if (newYm < config[market].start_ym) {
+      config[market].start_ym = newYm;
+    }
+    if (newYm > config[market].end_ym) {
+      config[market].end_ym = newYm;
+    }
+  }
+  await saveMarketConfig(env, config);
 }
 
-function validateEntry(item) {
-  if (!item || typeof item !== 'object') return false;
-  if (!item.date || !/^\d{8}$/.test(String(item.date))) return false;
-  if (item.url && typeof item.url !== 'string') return false;
-  if (item.copyright && typeof item.copyright !== 'string') return false;
-  return true;
-}
-
-async function updateBing(env) {
+async function updateBingForMarket(env, market) {
   try {
-    const bingApi = env.BING_API || DEFAULT_BING_API;
+    const bingApi = `https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
     const res = await fetch(bingApi);
-    if (!res.ok) return { success: false, error: 'Bing API 请求失败' };
+    if (!res.ok) return { success: false, market, error: 'Bing API 请求失败' };
 
     const data = await res.json();
-    if (!data.images?.length) return { success: false, error: '获取失败' };
+    if (!data.images?.length) return { success: false, market, error: '获取失败' };
 
     const img = data.images[0];
     const entry = {
       date: img.enddate,
-      copyright: img.copyright || '',
-      url: `https://cn.bing.com${img.urlbase}_UHD.jpg`
+      title: img.title || null,
+      copyright: img.copyright || null,
+      image_url: `https://www.bing.com${img.urlbase}_UHD.jpg`,
+      description: null
     };
 
     const key = getMonthKey(entry.date);
     const monthData = await getMonthData(env, key);
 
-    if (monthData.some(i => i.date === entry.date)) {
-      return { success: true, message: '已存在', date: entry.date };
+    if (!monthData[market]) {
+      monthData[market] = [];
     }
 
-    monthData.push(entry);
-    monthData.sort((a, b) => a.date.localeCompare(b.date));
-    await saveMonthData(env, key, monthData);
+    if (monthData[market].some(i => i.date === entry.date)) {
+      return { success: true, market, message: '已存在', date: entry.date };
+    }
 
-    return { success: true, message: '更新成功', data: entry, total: monthData.length };
+    monthData[market].push(entry);
+    monthData[market].sort((a, b) => a.date.localeCompare(b.date));
+    await saveMonthData(env, key, monthData);
+    await updateMarketConfigRange(env, market, entry.date.substring(0, 6));
+
+    return { success: true, market, message: '更新成功', data: entry, total: monthData[market].length };
   } catch (e) {
-    return { success: false, error: '更新失败: ' + e.message };
+    return { success: false, market, error: '更新失败: ' + e.message };
   }
 }
 
+async function updateAllMarkets(env) {
+  const config = await getMarketConfig(env);
+  const markets = Object.keys(config);
+  const results = await Promise.all(markets.map(m => updateBingForMarket(env, m)));
+  return results;
+}
+
+async function archiveYear(env, year) {
+  const monthKeys = [];
+  for (let m = 1; m <= 12; m++) {
+    const ym = year + String(m).padStart(2, '0');
+    monthKeys.push(PREFIX + ym);
+  }
+
+  const archiveData = {};
+  const archivedMonths = [];
+
+  for (const key of monthKeys) {
+    const data = await env.BING_KV.get(key, 'json');
+    if (data && Object.keys(data).length > 0) {
+      const ym = key.replace(PREFIX, '');
+      archiveData[ym] = data;
+      archivedMonths.push(ym);
+    }
+  }
+
+  if (Object.keys(archiveData).length === 0) {
+    return { success: false, error: `${year}年没有数据需要归档` };
+  }
+
+  await saveArchiveData(env, year, archiveData);
+
+  for (const key of monthKeys) {
+    await env.BING_KV.delete(key);
+  }
+
+  const config = await getMarketConfig(env);
+  const nextYear = String(parseInt(year) + 1);
+  const nextYearStart = nextYear + '01';
+
+  for (const market of Object.keys(config)) {
+    if (config[market].start_ym.startsWith(year)) {
+      config[market].start_ym = nextYearStart;
+    }
+  }
+  await saveMarketConfig(env, config);
+
+  await clearCache(env);
+
+  return {
+    success: true,
+    year,
+    archivedMonths,
+    message: `已归档${year}年数据，共${archivedMonths.length}个月`
+  };
+}
+
+async function checkAndArchive(env) {
+  const now = new Date();
+  const month = now.getMonth() + 1;
+  const date = now.getDate();
+
+  if (month === 1 && date === 1) {
+    const lastYear = now.getFullYear() - 1;
+    return await archiveYear(env, String(lastYear));
+  }
+
+  return { success: true, message: '无需归档' };
+}
+
+function validateEntry(item) {
+  if (!item || typeof item !== 'object') return false;
+  if (!item.date || !/^\d{8}$/.test(String(item.date))) return false;
+  return true;
+}
+
+function cleanItem(item) {
+  return {
+    date: item.date,
+    title: item.title || null,
+    copyright: item.copyright || null,
+    image_url: item.image_url || item.url || null,
+    description: item.description || null
+  };
+}
+
+function validateImportFormat(body) {
+  if (!body || typeof body !== 'object') return { valid: false, error: '无效的数据格式' };
+  const data = body.data;
+  if (!data || typeof data !== 'object') return { valid: false, error: '缺少 data 字段' };
+  const years = Object.keys(data);
+  if (years.length === 0) return { valid: false, error: 'data 字段为空' };
+  return { valid: true };
+}
+
 async function handleImport(body, env) {
-  const items = Array.isArray(body) ? body : body?.data || [];
-  if (!items.length) return { success: false, error: '无数据' };
+  const validation = validateImportFormat(body);
+  if (!validation.valid) return { success: false, error: validation.error };
 
-  const validItems = items.filter(validateEntry);
-  if (!validItems.length) return { success: false, error: '无有效数据' };
+  const yearMonthMap = body.data;
+  const currentYear = String(new Date().getFullYear());
+  
+  const archiveKeys = await getAllArchiveKeys(env);
+  const archivedYears = new Set(archiveKeys.map(k => k.replace(ARCHIVE_PREFIX, '')));
 
-  const monthMap = {};
-  for (const item of validItems) {
-    const key = getMonthKey(item.date);
-    (monthMap[key] ??= []).push(item);
+  const archiveDataMap = {};
+  const monthDataMap = {};
+  const marketConfigUpdates = {};
+
+  for (const year of archivedYears) {
+    archiveDataMap[year] = await getArchiveData(env, year);
   }
 
   let imported = 0, skipped = 0;
-  for (const [key, newItems] of Object.entries(monthMap)) {
-    const existing = await getMonthData(env, key);
-    const dates = new Set(existing.map(i => i.date));
-    for (const item of newItems) {
-      if (dates.has(item.date)) { skipped++; continue; }
-      existing.push(item);
-      imported++;
+
+  for (const [year, months] of Object.entries(yearMonthMap)) {
+    const isArchived = archivedYears.has(year) || year !== currentYear;
+    
+    if (isArchived) {
+      if (!archiveDataMap[year]) {
+        archiveDataMap[year] = {};
+      }
+      const archiveData = archiveDataMap[year];
+      
+      for (const [ym, markets] of Object.entries(months)) {
+        if (!archiveData[ym]) archiveData[ym] = {};
+        for (const [market, newItems] of Object.entries(markets)) {
+          if (!Array.isArray(newItems)) continue;
+          if (!archiveData[ym][market]) archiveData[ym][market] = [];
+          const dates = new Set(archiveData[ym][market].map(i => i.date));
+          for (const item of newItems) {
+            if (!validateEntry(item)) continue;
+            if (dates.has(item.date)) {
+              skipped++;
+              continue;
+            }
+            archiveData[ym][market].push(cleanItem(item));
+            imported++;
+            updateMarketConfigInMemory(marketConfigUpdates, market, ym);
+          }
+          archiveData[ym][market].sort((a, b) => a.date.localeCompare(b.date));
+        }
+      }
+    } else {
+      for (const [ym, markets] of Object.entries(months)) {
+        const key = PREFIX + ym;
+        if (!monthDataMap[key]) {
+          monthDataMap[key] = await getMonthData(env, key);
+        }
+        const monthData = monthDataMap[key];
+        
+        for (const [market, newItems] of Object.entries(markets)) {
+          if (!Array.isArray(newItems)) continue;
+          if (!monthData[market]) monthData[market] = [];
+          const dates = new Set(monthData[market].map(i => i.date));
+          for (const item of newItems) {
+            if (!validateEntry(item)) continue;
+            if (dates.has(item.date)) {
+              skipped++;
+              continue;
+            }
+            monthData[market].push(cleanItem(item));
+            imported++;
+            updateMarketConfigInMemory(marketConfigUpdates, market, ym);
+          }
+          monthData[market].sort((a, b) => a.date.localeCompare(b.date));
+        }
+      }
     }
-    existing.sort((a, b) => a.date.localeCompare(b.date));
-    await saveMonthData(env, key, existing);
   }
 
-  await buildCache(env);
-  return { success: true, imported, skipped, months: Object.keys(monthMap).length };
+  const writeOps = [];
+
+  for (const [year, data] of Object.entries(archiveDataMap)) {
+    if (Object.keys(data).length > 0) {
+      writeOps.push(env.BING_KV.put(getArchiveKey(year), JSON.stringify(data)));
+    }
+  }
+
+  for (const [key, data] of Object.entries(monthDataMap)) {
+    if (Object.keys(data).length > 0) {
+      writeOps.push(env.BING_KV.put(key, JSON.stringify(data)));
+    }
+  }
+
+  if (Object.keys(marketConfigUpdates).length > 0) {
+    const config = await getMarketConfig(env);
+    for (const [market, range] of Object.entries(marketConfigUpdates)) {
+      if (!config[market]) {
+        config[market] = { start_ym: range.start_ym, end_ym: range.end_ym };
+      } else {
+        if (range.start_ym < config[market].start_ym) {
+          config[market].start_ym = range.start_ym;
+        }
+        if (range.end_ym > config[market].end_ym) {
+          config[market].end_ym = range.end_ym;
+        }
+      }
+    }
+    writeOps.push(env.BING_KV.put(MARKET_CONFIG_KEY, JSON.stringify(config)));
+  }
+
+  await Promise.all(writeOps);
+
+  await clearCache(env);
+
+  const archivedCount = Object.keys(archiveDataMap).filter(y => !archivedYears.has(y)).length;
+  
+  return { 
+    success: true, 
+    imported, 
+    skipped, 
+    years: Object.keys(yearMonthMap),
+    archivedYears: Object.keys(archiveDataMap),
+    newArchivedYears: archivedCount
+  };
+}
+
+function updateMarketConfigInMemory(config, market, ym) {
+  if (!config[market]) {
+    config[market] = { start_ym: ym, end_ym: ym };
+  } else {
+    if (ym < config[market].start_ym) {
+      config[market].start_ym = ym;
+    }
+    if (ym > config[market].end_ym) {
+      config[market].end_ym = ym;
+    }
+  }
 }
 
 async function safeCompare(a, b) {
@@ -212,16 +509,33 @@ function needAuth() {
   });
 }
 
+function getRecentMonths(count = 2) {
+  const now = new Date();
+  const months = [];
+  for (let i = 0; i < count; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = d.getFullYear().toString() + String(d.getMonth() + 1).padStart(2, '0');
+    months.push(ym);
+  }
+  return months;
+}
+
 const PUBLIC_ROUTES = {
-  '/json': async ({ env, fields }) => {
-    const cached = await getAllData(env);
-    return json(filterFields(cached.data, fields));
+  '/json': async ({ env, all }) => {
+    if (all === '1') {
+      const cached = await getAllData(env);
+      return json({
+        data: cached.data,
+        market_time_config: cached.marketConfig
+      });
+    }
+    return json(await getRecentData(env, 2));
   }
 };
 
 const PROTECTED_ROUTES = {
   '/update': async ({ env }) => {
-    return json(await updateBing(env));
+    return json(await updateAllMarkets(env));
   },
   '/api/import': async ({ env, request }) => {
     const contentType = request.headers.get('content-type') || '';
@@ -247,23 +561,108 @@ const PROTECTED_ROUTES = {
     } catch {
       return json({ success: false, error: '请求格式错误' }, 400);
     }
-    const { year, month, date } = body;
+    const { year, month, date, market } = body;
+
+    if (!year && !month && !date && !market) {
+      return json({ success: false, error: '请至少指定一个参数：year、month、date 或 market' }, 400);
+    }
+
+    if (!year && !month && !date && market) {
+      const archiveKeys = await getAllArchiveKeys(env);
+      for (const archiveKey of archiveKeys) {
+        const archiveData = await env.BING_KV.get(archiveKey, 'json');
+        if (archiveData) {
+          for (const ym of Object.keys(archiveData)) {
+            delete archiveData[ym][market];
+            if (Object.keys(archiveData[ym]).length === 0) {
+              delete archiveData[ym];
+            }
+          }
+          if (Object.keys(archiveData).length === 0) {
+            await env.BING_KV.delete(archiveKey);
+          } else {
+            await env.BING_KV.put(archiveKey, JSON.stringify(archiveData));
+          }
+        }
+      }
+
+      const monthKeys = await getAllMonthKeys(env);
+      for (const k of monthKeys) {
+        const monthData = await getMonthData(env, k);
+        delete monthData[market];
+        if (Object.keys(monthData).length === 0) {
+          await env.BING_KV.delete(k);
+        } else {
+          await saveMonthData(env, k, monthData);
+        }
+      }
+
+      const config = await getMarketConfig(env);
+      delete config[market];
+      await saveMarketConfig(env, config);
+
+      await clearCache(env);
+      return json({ success: true, message: `已删除 ${market} 的所有数据` });
+    }
 
     if (date) {
       const normalizedDate = String(date).replace(/-/g, '');
       if (!/^\d{8}$/.test(normalizedDate)) {
         return json({ success: false, error: '日期格式错误，应为 YYYYMMDD 格式' }, 400);
       }
-      const monthKey = PREFIX + normalizedDate.slice(0, 6);
-      const monthData = await env.BING_KV.get(monthKey, 'json') || [];
-      const newData = monthData.filter(item => item.date !== normalizedDate);
-      if (newData.length === 0) {
-        await env.BING_KV.delete(monthKey);
+      const ym = normalizedDate.slice(0, 6);
+      const yearStr = normalizedDate.slice(0, 4);
+
+      const archiveKeys = await getAllArchiveKeys(env);
+      const isArchived = archiveKeys.some(k => k === ARCHIVE_PREFIX + yearStr);
+
+      if (market) {
+        if (isArchived) {
+          let archiveData = await getArchiveData(env, yearStr);
+          if (archiveData[ym] && archiveData[ym][market]) {
+            archiveData[ym][market] = archiveData[ym][market].filter(item => item.date !== normalizedDate);
+            if (archiveData[ym][market].length === 0) {
+              delete archiveData[ym][market];
+            }
+            if (Object.keys(archiveData[ym]).length === 0) {
+              delete archiveData[ym];
+            }
+            await saveArchiveData(env, yearStr, archiveData);
+          }
+        } else {
+          const monthKey = PREFIX + ym;
+          const monthData = await getMonthData(env, monthKey);
+          if (monthData[market]) {
+            monthData[market] = monthData[market].filter(item => item.date !== normalizedDate);
+            if (monthData[market].length === 0) {
+              delete monthData[market];
+            }
+            if (Object.keys(monthData).length === 0) {
+              await env.BING_KV.delete(monthKey);
+            } else {
+              await saveMonthData(env, monthKey, monthData);
+            }
+          }
+        }
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedDate} 的 ${market} 数据` });
       } else {
-        await env.BING_KV.put(monthKey, JSON.stringify(newData));
+        if (isArchived) {
+          let archiveData = await getArchiveData(env, yearStr);
+          if (archiveData[ym]) {
+            delete archiveData[ym];
+            if (Object.keys(archiveData).length === 0) {
+              await env.BING_KV.delete(ARCHIVE_PREFIX + yearStr);
+            } else {
+              await saveArchiveData(env, yearStr, archiveData);
+            }
+          }
+        } else {
+          await env.BING_KV.delete(PREFIX + ym);
+        }
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedDate} 所有市场数据` });
       }
-      await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedDate}` });
     }
 
     if (month) {
@@ -271,9 +670,48 @@ const PROTECTED_ROUTES = {
       if (!/^\d{6}$/.test(normalizedMonth)) {
         return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
       }
-      await env.BING_KV.delete(PREFIX + normalizedMonth);
-      await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedMonth}` });
+      const yearStr = normalizedMonth.slice(0, 4);
+
+      const archiveKeys = await getAllArchiveKeys(env);
+      const isArchived = archiveKeys.some(k => k === ARCHIVE_PREFIX + yearStr);
+
+      if (market) {
+        if (isArchived) {
+          let archiveData = await getArchiveData(env, yearStr);
+          if (archiveData[normalizedMonth]) {
+            delete archiveData[normalizedMonth][market];
+            if (Object.keys(archiveData[normalizedMonth]).length === 0) {
+              delete archiveData[normalizedMonth];
+            }
+            await saveArchiveData(env, yearStr, archiveData);
+          }
+        } else {
+          const monthKey = PREFIX + normalizedMonth;
+          const monthData = await getMonthData(env, monthKey);
+          delete monthData[market];
+          if (Object.keys(monthData).length === 0) {
+            await env.BING_KV.delete(monthKey);
+          } else {
+            await saveMonthData(env, monthKey, monthData);
+          }
+        }
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedMonth} 的 ${market} 数据` });
+      } else {
+        if (isArchived) {
+          let archiveData = await getArchiveData(env, yearStr);
+          delete archiveData[normalizedMonth];
+          if (Object.keys(archiveData).length === 0) {
+            await env.BING_KV.delete(ARCHIVE_PREFIX + yearStr);
+          } else {
+            await saveArchiveData(env, yearStr, archiveData);
+          }
+        } else {
+          await env.BING_KV.delete(PREFIX + normalizedMonth);
+        }
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedMonth} 所有市场数据` });
+      }
     }
 
     if (year) {
@@ -281,16 +719,70 @@ const PROTECTED_ROUTES = {
       if (!/^\d{4}$/.test(normalizedYear)) {
         return json({ success: false, error: '年份格式错误，应为 YYYY 格式' }, 400);
       }
-      const keys = await getAllKeys(env);
-      const yearKeys = keys.filter(k => k.replace(PREFIX, '').startsWith(normalizedYear));
-      for (const k of yearKeys) {
-        await env.BING_KV.delete(k);
+
+      if (market) {
+        const archiveKey = ARCHIVE_PREFIX + normalizedYear;
+        const archiveData = await env.BING_KV.get(archiveKey, 'json');
+        if (archiveData) {
+          for (const ym of Object.keys(archiveData)) {
+            delete archiveData[ym][market];
+            if (Object.keys(archiveData[ym]).length === 0) {
+              delete archiveData[ym];
+            }
+          }
+          if (Object.keys(archiveData).length === 0) {
+            await env.BING_KV.delete(archiveKey);
+          } else {
+            await saveArchiveData(env, normalizedYear, archiveData);
+          }
+        }
+
+        const monthKeys = await getAllMonthKeys(env);
+        const yearKeys = monthKeys.filter(k => getYearFromKey(k) === normalizedYear);
+        for (const k of yearKeys) {
+          const monthData = await getMonthData(env, k);
+          delete monthData[market];
+          if (Object.keys(monthData).length === 0) {
+            await env.BING_KV.delete(k);
+          } else {
+            await saveMonthData(env, k, monthData);
+          }
+        }
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${market} 数据` });
+      } else {
+        const archiveKey = ARCHIVE_PREFIX + normalizedYear;
+        await env.BING_KV.delete(archiveKey);
+
+        const monthKeys = await getAllMonthKeys(env);
+        const yearKeys = monthKeys.filter(k => getYearFromKey(k) === normalizedYear);
+        for (const k of yearKeys) {
+          await env.BING_KV.delete(k);
+        }
+
+        await clearCache(env);
+        return json({ success: true, message: `已删除 ${normalizedYear} 年所有市场数据` });
       }
-      await buildCache(env);
-      return json({ success: true, message: `已删除 ${normalizedYear} 年的 ${yearKeys.length} 个月份数据` });
     }
 
-    return json({ success: false, error: '请指定 year、month 或 date 参数' }, 400);
+    return json({ success: false, error: '请指定 year、month、date 或 market 参数' }, 400);
+  },
+  '/api/archive': async ({ env, request }) => {
+    let body = {};
+    try {
+      body = await request.json();
+    } catch {}
+    const { year } = body;
+
+    if (year) {
+      const normalizedYear = String(year);
+      if (!/^\d{4}$/.test(normalizedYear)) {
+        return json({ success: false, error: '年份格式错误，应为 YYYY 格式' }, 400);
+      }
+      return json(await archiveYear(env, normalizedYear));
+    }
+
+    return json(await checkAndArchive(env));
   }
 };
 
@@ -302,8 +794,8 @@ export default {
 
     const url = new URL(request.url);
     const path = url.pathname;
-    const fields = url.searchParams.get('fields');
-    const ctx_ = { env, url, fields, request };
+    const all = url.searchParams.get('all');
+    const ctx_ = { env, url, all, request };
 
     if (path === '/api/login' && request.method === 'POST') {
       try {
@@ -338,7 +830,11 @@ export default {
 
   async scheduled(_, env, ctx) {
     ctx.waitUntil(
-      updateBing(env).then(() => buildCache(env))
+      (async () => {
+        await checkAndArchive(env);
+        await updateAllMarkets(env);
+        await buildCache(env);
+      })()
     );
   }
 };
