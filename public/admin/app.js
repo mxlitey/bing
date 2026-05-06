@@ -183,31 +183,7 @@ async function refreshStats() {
     </div>
   `;
 
-  renderMarketConfig(markets, allData);
   renderMonthTree(allData);
-}
-
-function renderMarketConfig(markets, allData) {
-  const container = $('marketTable');
-  container.innerHTML = '';
-
-  markets.forEach(market => {
-    const config = marketConfig[market] || { start_ym: '-', end_ym: '-' };
-    const count = allData.filter(i => i.belong_market === market).length;
-    const el = document.createElement('div');
-    el.className = 'market-row';
-    el.innerHTML = `
-      <span class="market-code">${escapeHtml(market)}</span>
-      <span class="market-range">${escapeHtml(config.start_ym)} ~ ${escapeHtml(config.end_ym)}</span>
-      <span class="market-count">${escapeHtml(String(count))} 条</span>
-      <span class="tree-delete" data-market="${escapeHtml(market)}">删除</span>
-    `;
-    container.appendChild(el);
-  });
-
-  container.querySelectorAll('.tree-delete').forEach(el => {
-    el.addEventListener('click', handleDeleteClick);
-  });
 }
 
 function renderMonthTree(allData) {

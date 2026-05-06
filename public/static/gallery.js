@@ -320,9 +320,6 @@
   }
 
   function scrollTimelineToYear(year) {
-    const isMobile = window.innerWidth <= 768;
-    if (!isMobile) return;
-    
     const group = document.querySelector(`.timeline-group[data-year="${year}"]`);
     if (!group) return;
     const scroll = document.querySelector('.timeline-scroll');
