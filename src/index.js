@@ -5,6 +5,7 @@ const DEFAULT_MARKETS = [
 
 const PREFIX = 'bing_';
 const ARCHIVE_PREFIX = 'archive_';
+const TEMP_PREFIX = 'temp_';
 const MARKET_CONFIG_KEY = 'market_time_config';
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 
@@ -21,6 +22,7 @@ const json = (data, status = 200) => new Response(JSON.stringify(data), {
 
 const getMonthKey = (date) => PREFIX + date.substring(0, 6);
 const getArchiveKey = (year) => ARCHIVE_PREFIX + year;
+const getTempKey = (market) => TEMP_PREFIX + market;
 const getYearFromKey = (key) => key.replace(PREFIX, '').substring(0, 4);
 
 async function getMarketConfig(env) {
@@ -184,7 +186,7 @@ async function updateMarketConfigRange(env, market, newYm) {
   await saveMarketConfig(env, config);
 }
 
-async function updateBingForMarket(env, market, sharedMonthData) {
+async function updateBingForMarket(env, market) {
   try {
     const bingDomain = market === 'zh-CN' ? 'cn.bing.com' : 'www.bing.com';
     const bingApi = `https://${bingDomain}/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=${market}`;
@@ -207,63 +209,140 @@ async function updateBingForMarket(env, market, sharedMonthData) {
       return { success: false, market, error: '日期格式错误: ' + entry.date };
     }
 
-    const key = getMonthKey(entry.date);
-    
-    if (!sharedMonthData[key]) {
-      sharedMonthData[key] = await getMonthData(env, key);
-    }
-    const monthData = sharedMonthData[key];
+    await env.BING_KV.put(getTempKey(market), JSON.stringify(entry));
 
-    if (!monthData[market]) {
-      monthData[market] = [];
-    }
-
-    const existingIndex = monthData[market].findIndex(i => i.date === entry.date);
-    if (existingIndex >= 0) {
-      return { success: true, market, message: '已存在', date: entry.date };
-    }
-
-    monthData[market].push(entry);
-    monthData[market].sort((a, b) => a.date.localeCompare(b.date));
-
-    return { success: true, market, message: '更新成功', date: entry.date, key, needClearCache: true };
+    return { success: true, market, date: entry.date };
   } catch (e) {
     return { success: false, market, error: '更新失败: ' + e.message };
   }
 }
 
+async function verifyYesterdayData(env, markets) {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.getFullYear().toString() + 
+    String(yesterday.getMonth() + 1).padStart(2, '0') + 
+    String(yesterday.getDate()).padStart(2, '0');
+  
+  const key = getMonthKey(yesterdayStr);
+  const monthData = await getMonthData(env, key);
+  
+  const tempData = {};
+  for (const market of markets) {
+    const data = await env.BING_KV.get(getTempKey(market), 'json');
+    if (data && data.date === yesterdayStr) {
+      tempData[market] = data;
+    }
+  }
+  
+  const missingMarkets = [];
+  const mismatchedMarkets = [];
+  
+  for (const market of Object.keys(tempData)) {
+    const temp = tempData[market];
+    const final = monthData[market]?.find(item => item.date === yesterdayStr);
+    
+    if (!final) {
+      missingMarkets.push(market);
+    } else if (temp.image_url !== final.image_url || temp.copyright !== final.copyright) {
+      mismatchedMarkets.push(market);
+    }
+  }
+  
+  return { 
+    verified: missingMarkets.length === 0 && mismatchedMarkets.length === 0, 
+    missingMarkets, 
+    mismatchedMarkets,
+    yesterdayStr 
+  };
+}
+
 async function updateAllMarkets(env) {
   const config = await getMarketConfig(env);
   const markets = Object.keys(config);
-  const sharedMonthData = {};
   
-  const results = await Promise.all(markets.map(m => updateBingForMarket(env, m, sharedMonthData)));
+  const verification = await verifyYesterdayData(env, markets);
   
-  const writeOps = [];
-  const updatedMarkets = new Set();
+  const retryMarkets = [...verification.missingMarkets, ...verification.mismatchedMarkets];
+  let retryResults = [];
   
-  for (const key of Object.keys(sharedMonthData)) {
-    writeOps.push(env.BING_KV.put(key, JSON.stringify(sharedMonthData[key])));
-  }
-  
-  for (const result of results) {
-    if (result.success && result.key && result.message === '更新成功') {
-      updatedMarkets.add(result.market);
-    }
-  }
-  
-  if (updatedMarkets.size > 0) {
-    for (const market of updatedMarkets) {
-      const result = results.find(r => r.market === market);
-      if (result && result.date) {
-        await updateMarketConfigRange(env, market, result.date.substring(0, 6));
+  if (retryMarkets.length > 0) {
+    const yesterdayKey = getMonthKey(verification.yesterdayStr);
+    const monthData = await getMonthData(env, yesterdayKey);
+    
+    for (const market of retryMarkets) {
+      const tempData = await env.BING_KV.get(getTempKey(market), 'json');
+      if (tempData && tempData.date === verification.yesterdayStr) {
+        if (!monthData[market]) {
+          monthData[market] = [];
+        }
+        const existingIndex = monthData[market].findIndex(item => item.date === verification.yesterdayStr);
+        if (existingIndex >= 0) {
+          monthData[market][existingIndex] = tempData;
+        } else {
+          monthData[market].push(tempData);
+          monthData[market].sort((a, b) => a.date.localeCompare(b.date));
+        }
+        retryResults.push({ market, action: 'retry_success' });
       }
     }
+    
+    await saveMonthData(env, yesterdayKey, monthData);
   }
   
-  await Promise.all(writeOps);
+  const results = await Promise.all(markets.map(m => updateBingForMarket(env, m)));
   
-  return results;
+  const tempData = {};
+  for (const market of markets) {
+    const data = await env.BING_KV.get(getTempKey(market), 'json');
+    if (data) {
+      tempData[market] = data;
+    }
+  }
+  
+  const monthDataMap = {};
+  const updatedMarkets = [];
+  
+  for (const [market, entry] of Object.entries(tempData)) {
+    const key = getMonthKey(entry.date);
+    if (!monthDataMap[key]) {
+      monthDataMap[key] = await getMonthData(env, key);
+    }
+    const monthData = monthDataMap[key];
+    
+    if (!monthData[market]) {
+      monthData[market] = [];
+    }
+    
+    if (!monthData[market].some(item => item.date === entry.date)) {
+      monthData[market].push(entry);
+      monthData[market].sort((a, b) => a.date.localeCompare(b.date));
+      updatedMarkets.push({ market, ym: entry.date.substring(0, 6) });
+    }
+  }
+  
+  for (const [key, data] of Object.entries(monthDataMap)) {
+    await saveMonthData(env, key, data);
+  }
+  
+  if (updatedMarkets.length > 0) {
+    const config = await getMarketConfig(env);
+    for (const { market, ym } of updatedMarkets) {
+      if (!config[market]) {
+        config[market] = { start_ym: ym, end_ym: ym };
+      } else {
+        if (ym < config[market].start_ym) {
+          config[market].start_ym = ym;
+        }
+        if (ym > config[market].end_ym) {
+          config[market].end_ym = ym;
+        }
+      }
+    }
+    await saveMarketConfig(env, config);
+  }
+  
+  return { results, verification, retryResults };
 }
 
 async function archiveYear(env, year) {
