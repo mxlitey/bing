@@ -755,14 +755,6 @@ async function deleteMarketEverywhere(env, market) {
 }
 
 const PUBLIC_ROUTES = {
-  // 全量数据，仅用于导出兜底；首页与管理面板均按需走 manifest/month 接口
-  '/json': async ({ env }) => {
-    const cached = await getAllData(env);
-    return json({
-      data: cached.data,
-      market_time_config: cached.marketConfig
-    });
-  },
   // 轻量清单：各市场有数据的月份列表 + 最新一条，用于渲染时间线与首屏
   '/api/manifest': async ({ env, url }) => {
     const market = url.searchParams.get('market');

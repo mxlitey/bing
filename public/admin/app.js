@@ -40,21 +40,7 @@ function toast(msg, type = 'info') {
 }
 
 function initTheme() {
-  const saved = localStorage.getItem('theme') || 'sakura';
-  document.documentElement.setAttribute('data-theme', saved);
-  updateThemeButtons(saved);
-}
-
-function setTheme(theme) {
-  document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('theme', theme);
-  updateThemeButtons(theme);
-}
-
-function updateThemeButtons(activeTheme) {
-  document.querySelectorAll('.theme-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.theme === activeTheme);
-  });
+  document.documentElement.setAttribute('data-theme', 'sakura');
 }
 
 function showMainView() {
@@ -614,10 +600,6 @@ function readFile(file) {
 
 document.addEventListener('DOMContentLoaded', () => {
   initTheme();
-
-  document.querySelectorAll('.theme-btn').forEach(btn => {
-    btn.addEventListener('click', () => setTheme(btn.dataset.theme));
-  });
 
   $('logoutBtn').addEventListener('click', logout);
   $('loginBtn').addEventListener('click', login);

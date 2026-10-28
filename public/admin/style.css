@@ -64,69 +64,6 @@
   --action-btn-hover-bg: rgba(248, 187, 217, 0.1);
   --action-btn-hover-border: rgba(248, 187, 217, 0.3);
   --table-row-hover: rgba(248, 187, 217, 0.05);
-  --theme-sakura-dot: linear-gradient(135deg, #f8bbd9 0%, #b39ddb 100%);
-  --theme-dark-dot: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
-}
-
-[data-theme="dark"] {
-  --bg-deep: #0d1117;
-  --bg-base: #161b22;
-  --bg-elevated: #1c2128;
-  --glass-bg: rgba(30, 35, 42, 0.85);
-  --glass-border: rgba(80, 90, 110, 0.3);
-  --glass-highlight: rgba(100, 110, 130, 0.4);
-  --text-primary: #e6edf3;
-  --text-secondary: #8b949e;
-  --text-muted: #6e7681;
-  --accent-primary: #58a6ff;
-  --accent-secondary: #79c0ff;
-  --accent-tertiary: #a5d6ff;
-  --accent-success: #3fb950;
-  --accent-warning: #d29922;
-  --accent-danger: #f85149;
-  --gradient-1: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
-  --gradient-2: linear-gradient(135deg, #a371f7 0%, #8957e5 100%);
-  --gradient-3: linear-gradient(135deg, #3fb950 0%, #238636 100%);
-  --orb-1: linear-gradient(135deg, #1f6feb 0%, #388bfd 100%);
-  --orb-2: linear-gradient(135deg, #8957e5 0%, #a371f7 100%);
-  --orb-3: linear-gradient(135deg, #238636 0%, #3fb950 100%);
-  --bg-gradient-1: rgba(31, 111, 235, 0.12);
-  --bg-gradient-2: rgba(137, 87, 229, 0.1);
-  --bg-gradient-3: rgba(63, 185, 80, 0.08);
-  --shadow-color: rgba(0, 0, 0, 0.2);
-  --shadow-color-md: rgba(0, 0, 0, 0.3);
-  --shadow-color-lg: rgba(0, 0, 0, 0.4);
-  --glow-color: rgba(88, 166, 255, 0.3);
-  --card-icon-purple-bg: rgba(137, 87, 229, 0.15);
-  --card-icon-purple-color: #a371f7;
-  --card-icon-blue-bg: rgba(88, 166, 255, 0.15);
-  --card-icon-blue-color: #58a6ff;
-  --card-icon-amber-bg: rgba(210, 153, 34, 0.15);
-  --card-icon-amber-color: #d29922;
-  --card-icon-teal-bg: rgba(63, 185, 80, 0.15);
-  --card-icon-teal-color: #3fb950;
-  --toast-success-bg: rgba(63, 185, 80, 0.95);
-  --toast-success-border: rgba(35, 134, 54, 0.5);
-  --toast-success-color: white;
-  --toast-error-bg: rgba(248, 81, 73, 0.95);
-  --toast-error-border: rgba(218, 54, 51, 0.5);
-  --toast-error-color: white;
-  --toast-info-bg: rgba(88, 166, 255, 0.95);
-  --toast-info-border: rgba(31, 111, 235, 0.5);
-  --toast-info-color: white;
-  --input-bg: var(--bg-base);
-  --input-border: rgba(80, 90, 110, 0.4);
-  --input-focus-border: var(--accent-primary);
-  --input-focus-shadow: rgba(88, 166, 255, 0.2);
-  --drop-zone-bg: rgba(30, 35, 42, 0.6);
-  --drop-zone-border: rgba(80, 90, 110, 0.4);
-  --drop-zone-hover-bg: rgba(88, 166, 255, 0.1);
-  --action-btn-bg: rgba(30, 35, 42, 0.7);
-  --action-btn-hover-bg: rgba(88, 166, 255, 0.12);
-  --action-btn-hover-border: rgba(88, 166, 255, 0.35);
-  --table-row-hover: rgba(88, 166, 255, 0.06);
-  --theme-sakura-dot: linear-gradient(135deg, #f8bbd9 0%, #b39ddb 100%);
-  --theme-dark-dot: linear-gradient(135deg, #58a6ff 0%, #1f6feb 100%);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -202,34 +139,6 @@ body {
 
 .logo-sub { font-size: 13px; color: var(--text-muted); font-weight: 400; }
 .header-actions { display: flex; align-items: center; gap: 16px; }
-
-.theme-switcher {
-  display: flex; align-items: center; gap: 6px;
-  padding: 6px 8px;
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: 24px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-}
-
-.theme-btn {
-  width: 28px; height: 28px;
-  border-radius: 50%;
-  border: 2px solid transparent;
-  cursor: pointer;
-  padding: 0;
-  background: transparent;
-  display: flex; align-items: center; justify-content: center;
-  transition: all var(--transition-fast);
-}
-
-.theme-btn:hover { transform: scale(1.1); }
-.theme-btn.active { border-color: var(--text-primary); box-shadow: 0 0 0 2px var(--glass-bg); }
-.theme-dot { width: 16px; height: 16px; border-radius: 50%; display: block; }
-
-.theme-btn[data-theme="sakura"] .theme-dot { background: var(--theme-sakura-dot); }
-.theme-btn[data-theme="dark"] .theme-dot { background: var(--theme-dark-dot); }
 
 .tagline { font-size: 13px; color: var(--text-secondary); letter-spacing: 0.5px; }
 
@@ -655,9 +564,6 @@ input::placeholder { color: var(--text-muted); }
   .header-top { flex-direction: column; gap: 16px; align-items: stretch; }
   .logo { justify-content: center; }
   .header-actions { width: 100%; justify-content: center; gap: 12px; }
-  .theme-switcher { padding: 4px 6px; gap: 4px; }
-  .theme-btn { width: 24px; height: 24px; }
-  .theme-dot { width: 14px; height: 14px; }
   .container { padding: 0 16px 60px; }
   .card-header { padding: 16px 16px 0; }
   .card-body { padding: 16px; }
