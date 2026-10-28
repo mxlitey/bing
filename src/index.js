@@ -7,6 +7,7 @@ const PREFIX = 'bing_';
 const ARCHIVE_PREFIX = 'archive_';
 const TEMP_PREFIX = 'temp_';
 const MARKET_CONFIG_KEY = 'market_time_config';
+const MARKET_INDEX_KEY = 'market_index';
 const MAX_IMPORT_SIZE = 5 * 1024 * 1024;
 
 const CORS_HEADERS = {
@@ -101,6 +102,61 @@ async function getAllData(env) {
   return { data, marketConfig };
 }
 
+// 列表渲染只需要这几个字段，description 占全量体积 80% 以上且前端不使用
+function slimItem(item) {
+  return {
+    date: item.date,
+    title: item.title || null,
+    copyright: item.copyright || null,
+    image_url: item.image_url || item.url || null
+  };
+}
+
+function buildIndexFromData(data) {
+  const months = {};   // market -> 有数据的月份列表（升序）
+  const counts = {};   // market -> { ym: 条数 }
+  const latest = {};   // market -> 最新一条记录
+
+  // data 结构：{ year: { ym: { market: items } } }
+  for (const yearMonths of Object.values(data)) {
+    for (const [ym, markets] of Object.entries(yearMonths)) {
+      for (const [market, items] of Object.entries(markets)) {
+        if (!Array.isArray(items) || items.length === 0) continue;
+        if (!months[market]) {
+          months[market] = [];
+          counts[market] = {};
+        }
+        months[market].push(ym);
+        counts[market][ym] = items.length;
+
+        const last = items[items.length - 1];
+        if (!latest[market] || last.date > latest[market].date) {
+          latest[market] = slimItem(last);
+        }
+      }
+    }
+  }
+
+  for (const market of Object.keys(months)) months[market].sort();
+
+  return { v: 2, months, counts, latest };
+}
+
+// 索引是纯派生数据，可随时重建；写入数据后调用 invalidateIndex 让它下次重建
+async function invalidateIndex(env) {
+  await env.BING_KV.delete(MARKET_INDEX_KEY);
+}
+
+async function getMarketIndex(env) {
+  const cached = await env.BING_KV.get(MARKET_INDEX_KEY, 'json');
+  if (cached?.v === 2) return cached;
+
+  const { data } = await getAllData(env);
+  const index = buildIndexFromData(data);
+  await env.BING_KV.put(MARKET_INDEX_KEY, JSON.stringify(index));
+  return index;
+}
+
 function escapeHtml(str) {
   if (str == null) return '';
   return String(str).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -109,6 +165,31 @@ function escapeHtml(str) {
 function formatCopyright(str) {
   if (str == null) return '';
   return escapeHtml(str).replace(/([（(])/g, '<span class="nobr">$1').replace(/([）)])/g, '$1</span>');
+}
+
+// 读取单个月份中指定市场的记录（归档年份自动回退到 archive_YYYY）
+async function getMonthForMarket(env, ym, market, slim = true) {
+  const bucket = await getMonthBucket(env, ym);
+  let items = bucket[market];
+  if (!Array.isArray(items) || items.length === 0) return [];
+
+  items = items.slice().sort((a, b) => b.date.localeCompare(a.date));
+  return slim ? items.map(slimItem) : items;
+}
+
+async function getManifest(env, market) {
+  const [index, marketConfig] = await Promise.all([getMarketIndex(env), getMarketConfig(env)]);
+
+  const months = market ? (index.months[market] || []) : index.months;
+  const counts = market ? (index.counts?.[market] || {}) : (index.counts || {});
+  const latest = market ? (index.latest[market] || null) : index.latest;
+
+  return {
+    months,
+    counts,
+    latest,
+    market_time_config: marketConfig
+  };
 }
 
 async function getRecentData(env, monthCount = 2) {
@@ -211,26 +292,30 @@ async function imageResponse(item, market, request) {
   return new Response(upstream.body, { headers });
 }
 
+// 首屏只注入轻量索引（各市场月份列表 + 最新一条），不再内联全量数据
 async function injectHeroData(env, html) {
-  const cached = await getAllData(env);
-  const allData = flattenData(cached.data);
-  const latest = allData[0];
-  if (!latest) return html;
+  const manifest = await getManifest(env);
 
-  const dateFormatted = `${latest.date.slice(0, 4)}-${latest.date.slice(4, 6)}-${latest.date.slice(6, 8)}`;
+  const globalLatest = Object.values(manifest.latest || {})
+    .filter(Boolean)
+    .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+  const inlineData = `<script>window.__BING_MANIFEST__=${JSON.stringify(manifest)};</script>`;
+  html = html.replace('</head>', inlineData + '</head>');
+
+  if (!globalLatest) return html;
+
+  const dateFormatted = `${globalLatest.date.slice(0, 4)}-${globalLatest.date.slice(4, 6)}-${globalLatest.date.slice(6, 8)}`;
 
   try {
-    const imgUrl = new URL(latest.url || latest.image_url);
+    const imgUrl = new URL(globalLatest.image_url);
     const preconnect = `<link rel="preconnect" href="${imgUrl.origin}">`;
     html = html.replace('</head>', preconnect + '</head>');
   } catch {}
 
-  const inlineData = `<script>window.__BING_DATA__=${JSON.stringify(cached)};</script>`;
-  html = html.replace('</head>', inlineData + '</head>');
-
   return html
     .replace('id="heroDate"></div>', `id="heroDate">${dateFormatted}</div>`)
-    .replace('id="heroTitle"></h1>', `id="heroTitle">${formatCopyright(latest.copyright)}</h1>`);
+    .replace('id="heroTitle"></h1>', `id="heroTitle">${formatCopyright(globalLatest.copyright)}</h1>`);
 }
 
 function updateMarketConfigInMemory(config, market, ym) {
@@ -729,6 +814,27 @@ const PUBLIC_ROUTES = {
     }
     return json(await getRecentData(env, 2));
   },
+  // 轻量清单：各市场有数据的月份列表 + 最新一条，用于渲染时间线与首屏
+  '/api/manifest': async ({ env, url }) => {
+    const market = url.searchParams.get('market');
+    return json(await getManifest(env, market));
+  },
+  // 按月按市场拉取，默认剔除 description
+  '/api/month': async ({ env, url }) => {
+    const ym = (url.searchParams.get('ym') || '').replace(/-/g, '');
+    const market = url.searchParams.get('market');
+
+    if (!/^\d{6}$/.test(ym)) {
+      return json({ success: false, error: '月份格式错误，应为 YYYYMM 格式' }, 400);
+    }
+    if (!market) {
+      return json({ success: false, error: '缺少 market 参数' }, 400);
+    }
+
+    const full = url.searchParams.get('full') === '1';
+    const items = await getMonthForMarket(env, ym, market, !full);
+    return json({ ym, market, count: items.length, data: items });
+  },
   '/api/today': async ({ env, url, request }) => {
     const market = url.searchParams.get('market') || 'zh-CN';
     const item = await findWallpaper(env, market);
@@ -743,7 +849,9 @@ const PUBLIC_ROUTES = {
 
 const PROTECTED_ROUTES = {
   '/update': async ({ env }) => {
-    return json(await updateAllMarkets(env));
+    const result = await updateAllMarkets(env);
+    await invalidateIndex(env);
+    return json(result);
   },
   '/api/import': async ({ env, request }) => {
     const contentType = request.headers.get('content-type') || '';
@@ -897,7 +1005,10 @@ export default {
 
     if (PROTECTED_ROUTES[path]) {
       if (!(await checkAuth(request, env))) return needAuth();
-      return PROTECTED_ROUTES[path](ctx_);
+      const res = await PROTECTED_ROUTES[path](ctx_);
+      // 所有写操作统一让索引失效，下次请求时重建
+      if (request.method === 'POST') await invalidateIndex(env);
+      return res;
     }
 
     const assetsRes = await env.ASSETS.fetch(request);
@@ -917,6 +1028,7 @@ export default {
       (async () => {
         await checkAndArchive(env);
         await updateAllMarkets(env);
+        await invalidateIndex(env);
       })()
     );
   }
