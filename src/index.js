@@ -192,44 +192,6 @@ async function getManifest(env, market) {
   };
 }
 
-async function getRecentData(env, monthCount = 2) {
-  const recentMonths = getRecentMonths(monthCount);
-  const marketConfig = await getMarketConfig(env);
-  const data = {};
-
-  for (const ym of recentMonths) {
-    const key = PREFIX + ym;
-    const monthData = await env.BING_KV.get(key, 'json');
-    if (monthData && Object.keys(monthData).length > 0) {
-      const year = ym.substring(0, 4);
-      if (!data[year]) data[year] = {};
-      data[year][ym] = monthData;
-    }
-  }
-
-  return {
-    data,
-    market_time_config: marketConfig
-  };
-}
-
-function flattenData(data) {
-  const all = [];
-  for (const [year, months] of Object.entries(data)) {
-    for (const [ym, markets] of Object.entries(months)) {
-      for (const [market, items] of Object.entries(markets)) {
-        if (Array.isArray(items)) {
-          for (const item of items) {
-            all.push({ ...item, belong_market: market });
-          }
-        }
-      }
-    }
-  }
-  all.sort((a, b) => b.date.localeCompare(a.date));
-  return all;
-}
-
 // 当天日期按北京时间计算，避免 UTC 与本地日期错位
 function getTodayYmd() {
   const d = new Date(Date.now() + 8 * 3600 * 1000);
@@ -689,17 +651,6 @@ function needAuth() {
   });
 }
 
-function getRecentMonths(count = 2) {
-  const now = new Date();
-  const months = [];
-  for (let i = 0; i < count; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const ym = d.getFullYear().toString() + String(d.getMonth() + 1).padStart(2, '0');
-    months.push(ym);
-  }
-  return months;
-}
-
 function isEmpty(obj) {
   return Object.keys(obj).length === 0;
 }
@@ -804,15 +755,13 @@ async function deleteMarketEverywhere(env, market) {
 }
 
 const PUBLIC_ROUTES = {
-  '/json': async ({ env, all }) => {
-    if (all === '1') {
-      const cached = await getAllData(env);
-      return json({
-        data: cached.data,
-        market_time_config: cached.marketConfig
-      });
-    }
-    return json(await getRecentData(env, 2));
+  // 全量数据，仅用于导出兜底；首页与管理面板均按需走 manifest/month 接口
+  '/json': async ({ env }) => {
+    const cached = await getAllData(env);
+    return json({
+      data: cached.data,
+      market_time_config: cached.marketConfig
+    });
   },
   // 轻量清单：各市场有数据的月份列表 + 最新一条，用于渲染时间线与首屏
   '/api/manifest': async ({ env, url }) => {
