@@ -116,7 +116,8 @@ https://bing.<子域>.workers.dev/api/today?market=en-US
 
 - `market` 参数可选，默认 `zh-CN`
 - 优先返回当天壁纸；当天尚未抓取时回退到本月最新一张，再回退到上月最新一张
-- 缓存 10 分钟（`Cache-Control: public, max-age=600`）
+- 当天壁纸缓存到次日零点（`max-age` 动态计算），历史回退时缓存 10 分钟以便及时更新
+- 响应头附带 `ETag`（`"<market>-<date>"`），支持 `If-None-Match` 条件请求返回 `304`
 - 响应头附带 `X-Wallpaper-Date` 与 `X-Wallpaper-Market`，便于排查
 - 支持 `HEAD` 请求，无数据时返回 `404` JSON 错误
 

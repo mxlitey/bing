@@ -227,14 +227,34 @@ async function findWallpaper(env, market) {
 }
 
 const IMAGE_HEADERS = {
-  'cache-control': 'public, max-age=600, s-maxage=600',
   'access-control-allow-origin': '*'
 };
+
+// 距离北京时间下一个零点还有多少秒，当天壁纸在零点前不会变
+function secondsUntilNextDay() {
+  const dayMs = 86400 * 1000;
+  const nowBj = Date.now() + 8 * 3600 * 1000;
+  const nextMidnightBj = (Math.floor(nowBj / dayMs) + 1) * dayMs;
+  return Math.max(60, Math.floor((nextMidnightBj - nowBj) / 1000));
+}
 
 // 直接代理图片二进制，与常见「随机壁纸」接口一致的返回形式
 async function imageResponse(item, market, request) {
   const src = (item.image_url || item.url || '').replace('_UHD.jpg', '_1920x1080.jpg');
   if (!src) return json({ success: false, error: '该壁纸缺少图片地址' }, 404);
+
+  // 同一天同一市场的壁纸内容固定，用它做 ETag 即可支持 304
+  const etag = `"${market}-${item.date}"`;
+  const isToday = item.date === getTodayYmd();
+  // 当天壁纸可缓存到次日零点；回退到历史壁纸时说明今天还没抓到，需要短缓存以便及时更新
+  const maxAge = isToday ? secondsUntilNextDay() : 600;
+
+  if (request.headers.get('if-none-match') === etag) {
+    return new Response(null, {
+      status: 304,
+      headers: { ...IMAGE_HEADERS, etag, 'cache-control': `public, max-age=${maxAge}` }
+    });
+  }
 
   const upstream = await fetch(src, { cf: { cacheEverything: true, cacheTtl: 86400 } });
   if (!upstream.ok) {
@@ -243,6 +263,8 @@ async function imageResponse(item, market, request) {
 
   const headers = {
     ...IMAGE_HEADERS,
+    etag,
+    'cache-control': `public, max-age=${maxAge}, s-maxage=${maxAge}`,
     'content-type': upstream.headers.get('content-type') || 'image/jpeg',
     'x-wallpaper-date': item.date,
     'x-wallpaper-market': market
