@@ -4,37 +4,8 @@
   const $ = id => document.getElementById(id);
   const MONTHS = ['一月','二月','三月','四月','五月','六月','七月','八月','九月','十月','十一月','十二月'];
 
-  const MARKET_FLAGS = {
-    'zh-CN': 'cn',
-    'en-US': 'us',
-    'en-GB': 'gb',
-    'de-DE': 'de',
-    'fr-FR': 'fr',
-    'ja-JP': 'jp',
-    'en-CA': 'ca',
-    'fr-CA': 'ca',
-    'en-IN': 'in',
-    'en-WW': 'un',
-    'es-ES': 'es',
-    'it-IT': 'it',
-    'pt-BR': 'br'
-  };
-
-  const MARKET_NAMES = {
-    'zh-CN': '中国',
-    'en-US': '美国',
-    'en-GB': '英国',
-    'de-DE': '德国',
-    'fr-FR': '法国',
-    'ja-JP': '日本',
-    'en-CA': '加拿大 (英)',
-    'fr-CA': '加拿大 (法)',
-    'en-IN': '印度',
-    'en-WW': '国际',
-    'es-ES': '西班牙',
-    'it-IT': '意大利',
-    'pt-BR': '巴西'
-  };
+  const MARKET_FLAGS = window.BING_MARKETS.flags;
+  const MARKET_NAMES = window.BING_MARKETS.names;
 
   let yearData = {};
   let marketConfig = {};
@@ -45,9 +16,13 @@
   let currentMonth = '';
   let viewportObserver = null;
   let preloadObserver = null;
+  let yearObserver = null;
+  let monthObserver = null;
   let scrollEndTimer = null;
   let scrollPriorityTimer = null;
   let timelineClickHandler = null;
+  let scrollHandlerBound = false;
+  let marketSelectorBound = false;
   const blobUrls = new Set();
 
   function flattenData(data, market = null) {
@@ -70,18 +45,43 @@
 
   let allDataFetched = false;
 
+  // 用轻量签名判断数据是否真的变化，避免无意义的整页重建
+  function dataSignature(data) {
+    const parts = [];
+    for (const year of Object.keys(data).sort()) {
+      for (const ym of Object.keys(data[year]).sort()) {
+        for (const market of Object.keys(data[year][ym]).sort()) {
+          const items = data[year][ym][market];
+          if (Array.isArray(items)) parts.push(`${ym}:${market}:${items.length}`);
+        }
+      }
+    }
+    return parts.join('|');
+  }
+
+  function renderForMarket() {
+    groupData();
+    const allData = flattenData(yearData, currentMarket);
+    if (allData.length) renderHero(allData[0]);
+    renderChronicle();
+    renderTimeline();
+    initObservers();
+  }
+
+  function applyData(data, config) {
+    const sameData = dataSignature(data) === dataSignature(yearData);
+    yearData = data;
+    marketConfig = config;
+    if (sameData && Object.keys(groupedData).length > 0) return;
+
+    renderForMarket();
+    initMarketSelector();
+  }
+
   async function loadData() {
     const inlineData = window.__BING_DATA__;
     if (inlineData?.data) {
-      yearData = inlineData.data;
-      marketConfig = inlineData.marketConfig || {};
-      initMarketSelector();
-      groupData();
-      const allData = flattenData(yearData, currentMarket);
-      if (allData.length) renderHero(allData[0]);
-      renderChronicle();
-      renderTimeline();
-      initObservers();
+      applyData(inlineData.data, inlineData.marketConfig || {});
       const skeleton = $('skeleton');
       if (skeleton) skeleton.remove();
       fetchAllData();
@@ -96,15 +96,7 @@
       const cached = await response.json();
 
       if (!allDataFetched && cached.data) {
-        yearData = cached.data;
-        marketConfig = cached.market_time_config || {};
-        initMarketSelector();
-        const allData = flattenData(yearData, currentMarket);
-        if (allData.length) renderHero(allData[0]);
-        groupData();
-        renderChronicle();
-        renderTimeline();
-        initObservers();
+        applyData(cached.data, cached.market_time_config || {});
       }
 
       const skeleton = $('skeleton');
@@ -113,8 +105,7 @@
       const skeleton = $('skeleton');
       if (skeleton) skeleton.remove();
       if (!Object.keys(yearData).length) {
-        const chronicle = $('chronicle');
-        chronicle.innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
+        $('chronicle').innerHTML = `<div class="loading-error">加载失败: ${escapeHtml(err.message)}</div>`;
       }
     }
   }
@@ -126,15 +117,7 @@
       const cached = await response.json();
       if (cached.data) {
         allDataFetched = true;
-        yearData = cached.data;
-        marketConfig = cached.market_time_config || {};
-        initMarketSelector();
-        const allData = flattenData(yearData, currentMarket);
-        if (allData.length) renderHero(allData[0]);
-        groupData();
-        renderChronicle();
-        renderTimeline();
-        initObservers();
+        applyData(cached.data, cached.market_time_config || {});
       }
     } catch (e) {
       console.error('Failed to fetch all data:', e);
@@ -198,6 +181,9 @@
   }
 
   function renderChronicle() {
+    cleanup();
+    currentYear = '';
+    currentMonth = '';
     const years = Object.keys(groupedData).sort().reverse();
     if (!years.length) {
       $('chronicle').innerHTML = '<div class="loading-error">暂无壁纸数据</div>';
@@ -240,7 +226,6 @@
           thumbItem.onclick = () => {
             if (imgUrl) window.open(imgUrl, '_blank', 'noopener');
           };
-
           const img = document.createElement('img');
           img.className = 'lazy-img';
           if (imgUrl) {
@@ -345,11 +330,14 @@
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
     const handleScrollEnd = () => {
-      if (scrollEndTimer) clearTimeout(scrollEndTimer);
+      if (scrollEndTimer) {
+        clearTimeout(scrollEndTimer);
+        scrollEndTimer = null;
+      }
+      window.removeEventListener('scrollend', handleScrollEnd);
       isScrollingToTarget = false;
       loadByViewportPriority();
       updateUI(year, month);
-      window.removeEventListener('scrollend', handleScrollEnd);
     };
 
     window.addEventListener('scrollend', handleScrollEnd);
@@ -489,6 +477,11 @@
   }
 
   function initObservers() {
+    viewportObserver?.disconnect();
+    preloadObserver?.disconnect();
+    yearObserver?.disconnect();
+    monthObserver?.disconnect();
+
     const headerOffset = 80;
     const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
 
@@ -512,16 +505,12 @@
       });
     }, { rootMargin: '50px 0px', threshold: 0.01 });
 
-    document.querySelectorAll('.lazy-img').forEach(img => {
+    document.querySelectorAll('img.lazy-img:not(.loaded)').forEach(img => {
       viewportObserver.observe(img);
       preloadObserver.observe(img);
     });
 
-    const heroHeight = $('hero')?.offsetHeight || 0;
-    let lastScrollY = 0;
-    let sidebarVisible = false;
-
-    const yearObserver = new IntersectionObserver(entries => {
+    yearObserver = new IntersectionObserver(entries => {
       if (isScrollingToTarget) return;
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -531,7 +520,7 @@
       }
     }, scrollOpts);
 
-    const monthObserver = new IntersectionObserver(entries => {
+    monthObserver = new IntersectionObserver(entries => {
       if (isScrollingToTarget) return;
       for (const entry of entries) {
         if (entry.isIntersecting) {
@@ -545,11 +534,22 @@
     document.querySelectorAll('.year-section').forEach(s => yearObserver.observe(s));
     document.querySelectorAll('.month-section').forEach(s => monthObserver.observe(s));
 
+    initScrollHandler();
+  }
+
+  function initScrollHandler() {
+    if (scrollHandlerBound) return;
+    scrollHandlerBound = true;
+
+    let lastScrollY = 0;
+    let sidebarVisible = false;
+
     window.addEventListener('scroll', () => {
       const scrollY = window.scrollY;
       if (Math.abs(scrollY - lastScrollY) < 50) return;
       lastScrollY = scrollY;
 
+      const heroHeight = $('hero')?.offsetHeight || 0;
       const show = currentYear && scrollY > heroHeight * 0.5;
       if (show !== sidebarVisible) {
         sidebarVisible = show;
@@ -569,10 +569,19 @@
     blobUrls.clear();
   }
 
+  function renderForMarket() {
+    groupData();
+    const allData = flattenData(yearData, currentMarket);
+    if (allData.length) renderHero(allData[0]);
+    renderChronicle();
+    renderTimeline();
+    initObservers();
+  }
+
   function initMarketSelector() {
     const dropdown = $('marketDropdown');
     const btn = $('marketBtn');
-    
+
     const markets = Object.keys(marketConfig);
     if (!markets.length) return;
 
@@ -586,47 +595,45 @@
       </button>`;
     }).join('');
 
-    btn.onclick = (e) => {
-      e.stopPropagation();
-      dropdown.classList.toggle('show');
-    };
+    if (!marketSelectorBound) {
+      marketSelectorBound = true;
 
-    dropdown.onclick = (e) => {
-      const option = e.target.closest('.market-option');
-      if (!option) return;
-      const market = option.dataset.market;
-      if (market === currentMarket) {
+      btn.onclick = (e) => {
+        e.stopPropagation();
+        dropdown.classList.toggle('show');
+      };
+
+      dropdown.onclick = (e) => {
+        const option = e.target.closest('.market-option');
+        if (!option) return;
+        const market = option.dataset.market;
+        if (market === currentMarket) {
+          dropdown.classList.remove('show');
+          return;
+        }
+
+        currentMarket = market;
+        localStorage.setItem('bing_market', market);
+
+        updateMarketButton();
+        dropdown.querySelectorAll('.market-option').forEach(opt => {
+          opt.classList.toggle('active', opt.dataset.market === market);
+        });
         dropdown.classList.remove('show');
-        return;
-      }
-      
-      currentMarket = market;
-      localStorage.setItem('bing_market', market);
-      
-      updateMarketButton();
-      dropdown.querySelectorAll('.market-option').forEach(opt => {
-        opt.classList.toggle('active', opt.dataset.market === market);
-      });
-      dropdown.classList.remove('show');
-      
-      const loader = $('heroLoader');
-      if (loader) loader.classList.remove('hidden');
-      $('hero').style.backgroundImage = '';
-      
-      groupData();
-      const allData = flattenData(yearData, currentMarket);
-      if (allData.length) renderHero(allData[0]);
-      renderChronicle();
-      renderTimeline();
-      initObservers();
-      
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    };
 
-    document.addEventListener('click', () => {
-      dropdown.classList.remove('show');
-    });
-    
+        const loader = $('heroLoader');
+        if (loader) loader.classList.remove('hidden');
+        $('hero').style.backgroundImage = '';
+
+        renderForMarket();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      document.addEventListener('click', () => {
+        dropdown.classList.remove('show');
+      });
+    }
+
     updateMarketButton();
   }
 
