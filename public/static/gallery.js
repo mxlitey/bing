@@ -11,19 +11,15 @@
   let marketConfig = {};
   let groupedData = {};
   let currentMarket = localStorage.getItem('bing_market') || 'zh-CN';
-  let isScrollingToTarget = false;
   let currentYear = '';
   let currentMonth = '';
   let viewportObserver = null;
-  let preloadObserver = null;
   let yearObserver = null;
   let monthObserver = null;
   let scrollEndTimer = null;
-  let scrollPriorityTimer = null;
   let timelineClickHandler = null;
   let scrollHandlerBound = false;
   let marketSelectorBound = false;
-  const blobUrls = new Set();
 
   function flattenData(data, market = null) {
     const all = [];
@@ -181,7 +177,6 @@
   }
 
   function renderChronicle() {
-    cleanup();
     currentYear = '';
     currentMonth = '';
     const years = Object.keys(groupedData).sort().reverse();
@@ -228,9 +223,10 @@
           };
           const img = document.createElement('img');
           img.className = 'lazy-img';
+          img.decoding = 'async';
           if (imgUrl) {
-            img.dataset.src = imgUrl.replace('_UHD.jpg','_800x480.jpg');
-            img.dataset.fallback = imgUrl;
+            img.dataset.src = imgUrl.replace('_UHD.jpg', '_400x240.jpg');
+            img.dataset.fallback = imgUrl.replace('_UHD.jpg', '_800x480.jpg');
           }
           img.alt = item.copyright || '';
 
@@ -325,23 +321,11 @@
     const el = $(elementId);
     if (!el) return;
 
-    cancelNonViewportRequests();
-    isScrollingToTarget = true;
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
-    const handleScrollEnd = () => {
-      if (scrollEndTimer) {
-        clearTimeout(scrollEndTimer);
-        scrollEndTimer = null;
-      }
-      window.removeEventListener('scrollend', handleScrollEnd);
-      isScrollingToTarget = false;
-      loadByViewportPriority();
-      updateUI(year, month);
-    };
-
-    window.addEventListener('scrollend', handleScrollEnd);
-    scrollEndTimer = setTimeout(handleScrollEnd, 1500);
+    // 跳转后重新校准时间线高亮
+    if (scrollEndTimer) clearTimeout(scrollEndTimer);
+    scrollEndTimer = setTimeout(() => updateUI(year, month), 400);
   }
 
   function scrollToMonth(month, year) {
@@ -353,110 +337,29 @@
     scrollToElement(`m${month}`, year, month);
   }
 
-  function revokeBlobUrl(url) {
-    if (blobUrls.has(url)) {
-      URL.revokeObjectURL(url);
-      blobUrls.delete(url);
-    }
-  }
-
   function loadImage(img) {
     if (!img.dataset.src || img.src) return;
 
-    if (img.abortController) {
-      img.abortController.abort();
-      delete img.abortController;
-    }
-
-    const controller = new AbortController();
-    img.abortController = controller;
     const src = img.dataset.src;
     const fallback = img.dataset.fallback;
 
     img.onload = () => {
       img.removeAttribute('data-src');
       img.classList.add('loaded');
-      delete img.abortController;
     };
 
     img.onerror = () => {
-      if (img.src?.startsWith('blob:')) revokeBlobUrl(img.src);
-      img.src = fallback;
-      img.classList.add('loaded');
-      delete img.abortController;
+      if (fallback && img.src !== fallback) {
+        img.dataset.src = fallback;
+        img.dataset.fallback = '';
+        img.src = fallback;
+      } else {
+        img.classList.add('loaded');
+      }
     };
 
-    fetch(src, { signal: controller.signal, priority: img.fetchPriority || 'auto' })
-      .then(res => {
-        if (!res.ok) throw new Error();
-        return res.blob();
-      })
-      .then(blob => {
-        const blobUrl = URL.createObjectURL(blob);
-        blobUrls.add(blobUrl);
-        img.src = blobUrl;
-      })
-      .catch(err => {
-        if (err.name !== 'AbortError') img.src = src;
-      });
-  }
-
-  function loadByViewportPriority() {
-    const viewportTop = window.scrollY;
-    const viewportBottom = viewportTop + window.innerHeight;
-    const PRELOAD_MARGIN = window.innerHeight;
-
-    const viewportImages = [];
-    const preloadImages = [];
-    const allLazyImages = document.querySelectorAll('img.lazy-img:not(.loaded)');
-
-    allLazyImages.forEach(img => {
-      const rect = img.getBoundingClientRect();
-      const imgTop = rect.top + viewportTop;
-      const imgBottom = rect.bottom + viewportTop;
-
-      if (imgBottom >= viewportTop && imgTop <= viewportBottom) {
-        viewportImages.push(img);
-      } else if (imgBottom >= viewportTop - PRELOAD_MARGIN && imgTop <= viewportBottom + PRELOAD_MARGIN) {
-        preloadImages.push(img);
-      }
-    });
-
-    viewportImages.forEach(img => {
-      img.fetchPriority = 'high';
-      loadImage(img);
-      viewportObserver?.unobserve(img);
-      preloadObserver?.unobserve(img);
-    });
-
-    setTimeout(() => {
-      preloadImages.forEach(img => {
-        img.fetchPriority = 'low';
-        loadImage(img);
-        viewportObserver?.unobserve(img);
-        preloadObserver?.unobserve(img);
-      });
-    }, 200);
-  }
-
-  function cancelNonViewportRequests() {
-    const viewportTop = window.scrollY;
-    const viewportBottom = viewportTop + window.innerHeight;
-
-    document.querySelectorAll('img.lazy-img:not(.loaded)').forEach(img => {
-      if (!img.abortController) return;
-
-      const rect = img.getBoundingClientRect();
-      const imgTop = rect.top + viewportTop;
-      const imgBottom = rect.bottom + viewportTop;
-
-      if (imgBottom < viewportTop || imgTop > viewportBottom) {
-        if (img.src?.startsWith('blob:')) revokeBlobUrl(img.src);
-        img.removeAttribute('src');
-        img.abortController.abort();
-        delete img.abortController;
-      }
-    });
+    // 直接交给浏览器加载，可命中 HTTP 缓存；不再走 fetch+blob（会绕过缓存并长期占用内存）
+    img.src = src;
   }
 
   function updateUI(year, month) {
@@ -478,40 +381,29 @@
 
   function initObservers() {
     viewportObserver?.disconnect();
-    preloadObserver?.disconnect();
     yearObserver?.disconnect();
     monthObserver?.disconnect();
 
     const headerOffset = 80;
     const scrollOpts = { threshold: 0, rootMargin: `-${headerOffset}px 0px -${window.innerHeight - headerOffset - 1}px 0px` };
 
+    // 单阈值即可：之前用 6 档阈值，1900 张图滚动一遍会产生上万次回调。
+    // 观察 .thumb-item 而不是内部 img：content-visibility 会跳过屏幕外子树，
+    // 其内部的 img 没有布局盒，直接观察它可能不触发回调。
     viewportObserver = new IntersectionObserver(entries => {
       entries.forEach(e => {
-        if (!isScrollingToTarget && e.isIntersecting) {
-          loadImage(e.target);
-          viewportObserver.unobserve(e.target);
-          preloadObserver?.unobserve(e.target);
-        }
+        if (!e.isIntersecting) return;
+        const img = e.target.querySelector('img.lazy-img:not(.loaded)');
+        if (img) loadImage(img);
+        viewportObserver.unobserve(e.target);
       });
-    }, { rootMargin: '0px', threshold: [0, 0.1, 0.25, 0.5, 0.75, 1] });
+    }, { rootMargin: '300px 0px', threshold: 0 });
 
-    preloadObserver = new IntersectionObserver(entries => {
-      entries.forEach(e => {
-        if (!isScrollingToTarget && e.isIntersecting && !e.target.src) {
-          loadImage(e.target);
-          viewportObserver?.unobserve(e.target);
-          preloadObserver.unobserve(e.target);
-        }
-      });
-    }, { rootMargin: '50px 0px', threshold: 0.01 });
-
-    document.querySelectorAll('img.lazy-img:not(.loaded)').forEach(img => {
-      viewportObserver.observe(img);
-      preloadObserver.observe(img);
+    document.querySelectorAll('.thumb-item').forEach(el => {
+      viewportObserver.observe(el);
     });
 
     yearObserver = new IntersectionObserver(entries => {
-      if (isScrollingToTarget) return;
       for (const entry of entries) {
         if (entry.isIntersecting) {
           updateUI(entry.target.id.slice(1), currentMonth);
@@ -521,7 +413,6 @@
     }, scrollOpts);
 
     monthObserver = new IntersectionObserver(entries => {
-      if (isScrollingToTarget) return;
       for (const entry of entries) {
         if (entry.isIntersecting) {
           const m = entry.target.id.slice(1);
@@ -543,30 +434,21 @@
 
     let lastScrollY = 0;
     let sidebarVisible = false;
+    let heroHeight = 0;
 
+    // 只负责侧边栏显隐；图片加载全部交给 IntersectionObserver
     window.addEventListener('scroll', () => {
       const scrollY = window.scrollY;
       if (Math.abs(scrollY - lastScrollY) < 50) return;
       lastScrollY = scrollY;
 
-      const heroHeight = $('hero')?.offsetHeight || 0;
+      if (!heroHeight) heroHeight = $('hero')?.offsetHeight || 0;
       const show = currentYear && scrollY > heroHeight * 0.5;
       if (show !== sidebarVisible) {
         sidebarVisible = show;
         $('timelineSidebar').classList.toggle('visible', show);
       }
-
-      if (scrollPriorityTimer) clearTimeout(scrollPriorityTimer);
-      scrollPriorityTimer = setTimeout(() => {
-        cancelNonViewportRequests();
-        loadByViewportPriority();
-      }, 150);
     }, { passive: true });
-  }
-
-  function cleanup() {
-    blobUrls.forEach(url => URL.revokeObjectURL(url));
-    blobUrls.clear();
   }
 
   function renderForMarket() {
@@ -644,8 +526,6 @@
     const name = MARKET_NAMES[currentMarket] || currentMarket;
     btn.title = `当前市场: ${name}`;
   }
-
-  window.addEventListener('beforeunload', cleanup);
 
   window.scrollTo(0, 0);
   loadData();

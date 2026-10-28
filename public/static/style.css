@@ -90,12 +90,15 @@ body {
   backdrop-filter: blur(20px);
   border: 1px solid var(--border);
   border-radius: 20px;
-  opacity: 0;
-  transition: opacity 0.3s;
   max-height: 70vh;
   overflow: visible;
+  /* opacity: 0 仍会参与合成，叠加 backdrop-filter 会一直消耗 GPU；
+     用 visibility 让它彻底退出渲染 */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s, visibility 0.3s;
 }
-.timeline-sidebar.visible { opacity: 1; }
+.timeline-sidebar.visible { opacity: 1; visibility: visible; }
 
 .market-selector {
   position: fixed;
@@ -356,27 +359,36 @@ body {
   border-radius: var(--radius);
   overflow: hidden;
   background: #12121a;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s;
   cursor: pointer;
+  /* 屏幕外的格子跳过渲染，数据量大时显著减少滚动开销。
+     占位尺寸用 auto 关键字，浏览器会记住实际渲染尺寸，避免滚动条跳动 */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 180px 101px;
 }
-.thumb-item:hover { transform: scale(1.02); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
+.thumb-item:hover {
+  transform: scale(1.02);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
 .thumb-item img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   opacity: 0;
+  /* 只过渡 transform + opacity（都在合成阶段），box-shadow 动画代价高，已移除 */
   transition: opacity 0.3s, transform 0.3s;
 }
 .thumb-item img.loaded { opacity: 1; }
-.thumb-item:hover img { transform: scale(1.05); }
+/* 仅在悬停时提升为合成层，避免上千个元素常驻分层 */
+.thumb-item:hover img { transform: scale(1.05); will-change: transform; }
 
 .thumb-date {
   position: absolute;
   bottom: 8px;
   right: 8px;
   padding: 4px 10px;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
+  /* 不用 backdrop-filter：每张缩略图一个模糊层，数量上千时滚动会严重掉帧 */
+  background: rgba(0, 0, 0, 0.55);
   border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
@@ -400,7 +412,7 @@ body {
     border-radius: 16px 16px 0 0;
     overflow: visible;
   }
-  .timeline-sidebar.visible { opacity: 1; }
+  .timeline-sidebar.visible { opacity: 1; visibility: visible; }
   .timeline-scroll {
     display: flex;
     flex-direction: row;
